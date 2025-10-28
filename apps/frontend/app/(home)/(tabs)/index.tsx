@@ -29,7 +29,7 @@ export default function SwipeCards() {
     <GestureHandlerRootView>
       <SignedIn>
         <View style={styles.container}>
-          <View style={{ flex: 7 }}>
+          <View style={styles.cardsContainer}>
             <Animated.View
               entering={FadeIn}
               exiting={FadeOut}
@@ -101,8 +101,12 @@ const styles = StyleSheet.create({
   buttonsContainer: {
     alignItems: "center",
     flexDirection: "row",
-    flex: 5,
+    height: 120,
     justifyContent: "center",
+    paddingBottom: 90,
+  },
+  cardsContainer: {
+    flex: 1,
   },
   container: {
     backgroundColor: "#242831",

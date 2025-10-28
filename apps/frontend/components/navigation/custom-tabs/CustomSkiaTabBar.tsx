@@ -17,14 +17,14 @@ import { useDerivedValue, withSpring } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SkiaTabButton } from "./SkiaTabButton";
 
-const BOTTOM_BAR_HEIGHT_OFFSET = 50;
+const BOTTOM_BAR_HEIGHT_OFFSET = 30;
 
 export function CustomSkiaTabBar() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const { width: screenWidth } = useWindowDimensions();
   const { bottom } = useSafeAreaInsets();
 
-  const bottomTabBarHeight = 65 + bottom / 2;
+  const bottomTabBarHeight = 45 + bottom / 2;
   const tabCount = 3;
 
   const animatedIndex = useDerivedValue(
@@ -91,7 +91,7 @@ export function CustomSkiaTabBar() {
           color="#7E6CE2"
           cx={animatedCircleCx}
           cy={BOTTOM_BAR_HEIGHT_OFFSET}
-          r={43}
+          r={28}
         />
       </Canvas>
 
@@ -147,6 +147,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-around",
     alignItems: "center",
     height: "100%",
-    paddingBottom: 20,
+    paddingBottom: 12,
   },
 });

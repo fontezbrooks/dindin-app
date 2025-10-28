@@ -1,0 +1,6 @@
+# flow.yaml
+
+appId: com.carlhiggins.frontend
+---
+- launchApp
+- tapOn: "Text on the screen"

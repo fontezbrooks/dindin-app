@@ -1,5 +1,4 @@
-import { SignedIn, SignedOut } from "@clerk/clerk-expo";
-import { SignOutButton } from "@clerk/clerk-react";
+import { SignedIn, SignedOut, useUser } from "@clerk/clerk-expo";
 import { AntDesign } from "@expo/vector-icons";
 import { Link } from "expo-router";
 import { PressableScale } from "pressto";
@@ -7,9 +6,9 @@ import { useCallback, useRef } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
-import { SwipeableCard } from "../../components/SwipeCards";
-import { IMAGES } from "../../constants/Images";
-import { useSwipeControls } from "../../hooks/use-swipe-controls";
+import { SwipeableCard } from "../../../components/SwipeCards";
+import { IMAGES } from "../../../constants/Images";
+import { useSwipeControls } from "../../../hooks/use-swipe-controls";
 
 export default function SwipeCards() {
   const { activeIndex, refs, swipeRight, swipeLeft, reset } =
@@ -25,11 +24,13 @@ export default function SwipeCards() {
 
     reset();
   }, [activeIndex, reset]);
+  const { user } = useUser();
 
   return (
     <GestureHandlerRootView>
       <SignedIn>
         <View style={styles.container}>
+          <Text>Hello {user?.id}</Text>
           <View style={{ flex: 7 }}>
             <Animated.View
               entering={FadeIn}
@@ -46,7 +47,7 @@ export default function SwipeCards() {
                   activeIndex={activeIndex}
                   image={IMAGES[index]}
                   index={index}
-                  key={IMAGES[index]}
+                  key={index}
                   onSwipeLeft={() => {
                     disliked.current += 1;
                   }}
@@ -75,7 +76,6 @@ export default function SwipeCards() {
             </PressableScale>
           </View>
         </View>
-        <SignOutButton />
       </SignedIn>
       <SignedOut>
         <Link href="/(auth)/sign-in">
@@ -98,12 +98,12 @@ const styles = StyleSheet.create({
     boxShadow: "0px 4px 0px rgba(0, 0, 0, 0.1)",
     height: 80,
     justifyContent: "center",
-    marginHorizontal: 20,
+    marginHorizontal: 5,
   },
   buttonsContainer: {
     alignItems: "center",
     flexDirection: "row",
-    flex: 2,
+    flex: 5,
     justifyContent: "center",
   },
   container: {

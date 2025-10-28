@@ -1,4 +1,4 @@
-import { SignedIn, SignedOut, useUser } from "@clerk/clerk-expo";
+import { SignedIn, SignedOut } from "@clerk/clerk-expo";
 import { AntDesign } from "@expo/vector-icons";
 import { Link } from "expo-router";
 import { PressableScale } from "pressto";
@@ -24,13 +24,11 @@ export default function SwipeCards() {
 
     reset();
   }, [activeIndex, reset]);
-  const { user } = useUser();
 
   return (
     <GestureHandlerRootView>
       <SignedIn>
         <View style={styles.container}>
-          <Text>Hello {user?.id}</Text>
           <View style={{ flex: 7 }}>
             <Animated.View
               entering={FadeIn}

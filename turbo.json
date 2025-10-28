@@ -7,6 +7,15 @@
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": ["dist/**"]
     },
+    "prebuild": {
+      "dependsOn": ["^prebuild"]
+    },
+    "eas": {
+      "dependsOn": ["^eas"]
+    },
+    "eas:dev": {
+      "dependsOn": ["^eas:dev"]
+    },
     "lint": {
       "dependsOn": ["^lint"]
     },

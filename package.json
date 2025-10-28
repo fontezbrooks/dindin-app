@@ -1,0 +1,38 @@
+{
+  "name": "dindin-app",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "workspaces": {
+    "packages": [
+      "apps/*",
+      "packages/*"
+    ]
+  },
+  "scripts": {
+    "check": "biome check --write .",
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "check-types": "turbo check-types",
+    "dev:native": "turbo -F native dev",
+    "dev:web": "turbo -F web dev",
+    "dev:server": "turbo -F server dev"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.3.0",
+    "@types/bun": "latest",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.6",
+    "turbo": "^2.5.8",
+    "ultracite": "6.0.4"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,json,jsonc,css,scss,md,mdx}": [
+      "bun x ultracite fix"
+    ]
+  },
+  "packageManager": "bun@1.2.0"
+}

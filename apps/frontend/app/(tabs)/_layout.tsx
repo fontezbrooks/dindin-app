@@ -17,6 +17,7 @@ function TabBarIcon(props: {
 export default function TabLayout() {
   const colorScheme = useColorScheme();
 
+  const numFloat = 0.5;
   return (
     <Tabs
       screenOptions={{
@@ -39,7 +40,7 @@ export default function TabLayout() {
                     color={Colors[colorScheme ?? "light"].text}
                     name="info-circle"
                     size={25}
-                    style={{ marginRight: 15, opacity: pressed ? 0.5 : 1 }}
+                    style={{ marginRight: 15, opacity: pressed ? numFloat : 1 }}
                   />
                 )}
               </Pressable>

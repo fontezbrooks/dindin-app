@@ -46,7 +46,7 @@ export default function SwipeCards() {
                   activeIndex={activeIndex}
                   image={IMAGES[index]}
                   index={index}
-                  key={index}
+                  key={IMAGES[index]}
                   onSwipeLeft={() => {
                     disliked.current += 1;
                   }}

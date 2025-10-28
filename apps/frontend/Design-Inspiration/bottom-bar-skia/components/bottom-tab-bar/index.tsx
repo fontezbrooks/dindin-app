@@ -17,7 +17,7 @@ import { useDerivedValue, withSpring } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Touchable from "react-native-skia-gesture";
 import { scheduleOnRN } from "react-native-worklets";
-import { ScreenNames } from "../../constants/screens";
+import { ScreenNames } from "../../../constants/screens";
 import { BottomTabItem } from "./bottom-tab-item";
 
 const BOTTOM_BAR_HEIGHT_OFFSET = 50;

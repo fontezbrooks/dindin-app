@@ -2,6 +2,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import type React from "react";
+import { useState } from "react";
 import { Dimensions, StyleSheet, Text, View } from "react-native";
 import type { RecipeCard as RecipeCardType } from "../types/recipe";
 
@@ -14,10 +15,15 @@ const { width: screenWidth } = Dimensions.get("window");
 const CARD_WIDTH = screenWidth * 0.9;
 const CARD_HEIGHT = CARD_WIDTH * 1.4;
 
+// Default fallback image
+const FALLBACK_IMAGE =
+  "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&q=80";
+
 export const RecipeCard: React.FC<RecipeCardProps> = ({
   recipe,
   isTopCard = false,
 }) => {
+  const [imageError, setImageError] = useState(false);
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
       case "easy":
@@ -62,16 +68,22 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
     );
   };
 
+  // Determine which image to use
+  const imageSource =
+    imageError || !recipe.imageUrl ? FALLBACK_IMAGE : recipe.imageUrl;
+
   return (
     <View style={styles.container}>
       <Image
         cachePolicy="memory-disk"
         contentFit="cover"
-        placeholder={{ uri: recipe.imageUrl }}
+        onError={() => setImageError(true)}
+        placeholder={{ uri: FALLBACK_IMAGE }}
         placeholderContentFit="cover"
         priority={isTopCard ? "high" : "normal"}
-        source={{ uri: recipe.imageUrl }}
+        source={{ uri: imageSource }}
         style={styles.image}
+        transition={300}
       />
 
       {/* Gradient overlay for better text readability */}

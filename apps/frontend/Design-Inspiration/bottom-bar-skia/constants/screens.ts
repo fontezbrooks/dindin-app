@@ -1,7 +1,7 @@
 const ScreenNames = {
-  Home: 'Home',
-  Search: 'Search',
-  User: 'User',
+  Home: "Home",
+  Search: "Search",
+  User: "User",
 } as const;
 
 export { ScreenNames };

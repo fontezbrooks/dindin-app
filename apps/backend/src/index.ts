@@ -5,21 +5,25 @@ import { logger } from "hono/logger";
 import { connectDB } from "./config/database";
 import { authMiddleware } from "./middleware/auth";
 import authRoutes from "./routes/auth";
-import userRoutes from "./routes/users";
 import recipeRoutes from "./routes/recipes";
 import restaurantRoutes from "./routes/restaurants";
 import sessionRoutes from "./routes/sessions";
+import userRoutes from "./routes/users";
 import { setupWebSocket } from "./websocket/server";
 
 const app = new Hono();
 const PORT = process.env.PORT || 3000;
+const basePath = process.env.EXPO_PUBLIC_API_URL || "http://localhost";
 
 // Global middleware
 app.use("*", logger());
 app.use("*", cors());
+app.basePath(basePath);
 
 // Health check
-app.get("/health", (c) => c.json({ status: "healthy", timestamp: new Date().toISOString() }));
+app.get("/health", (c) =>
+  c.json({ status: "healthy", timestamp: new Date().toISOString() })
+);
 
 // Public routes
 app.route("/api/auth", authRoutes);
@@ -41,6 +45,6 @@ const server = serve({
   websocket: setupWebSocket(),
 });
 
-console.log(`🚀 Server running on http://localhost:${PORT}`);
+console.log(`🚀 Server running on http://10.10.38.110:${PORT}`);
 
 export default app;

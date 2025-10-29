@@ -98,11 +98,7 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": [
-          "amount",
-          "name",
-          "unit"
-        ],
+        "required": ["amount", "name", "unit"],
         "properties": {
           "_id": {
             "$ref": "#/$defs/ObjectId"
@@ -123,10 +119,7 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": [
-          "description",
-          "step"
-        ],
+        "required": ["description", "step"],
         "properties": {
           "_id": {
             "$ref": "#/$defs/ObjectId"
@@ -148,14 +141,7 @@
     },
     "nutrition": {
       "type": "object",
-      "required": [
-        "calories",
-        "carbs",
-        "fat",
-        "fiber",
-        "protein",
-        "sugar"
-      ],
+      "required": ["calories", "carbs", "fat", "fiber", "protein", "sugar"],
       "properties": {
         "calories": {
           "type": "integer"
@@ -205,9 +191,7 @@
           "pattern": "^[0-9a-fA-F]{24}$"
         }
       },
-      "required": [
-        "$oid"
-      ],
+      "required": ["$oid"],
       "additionalProperties": false
     },
     "Double": {
@@ -219,11 +203,7 @@
           "type": "object",
           "properties": {
             "$numberDouble": {
-              "enum": [
-                "Infinity",
-                "-Infinity",
-                "NaN"
-              ]
+              "enum": ["Infinity", "-Infinity", "NaN"]
             }
           }
         }
@@ -237,9 +217,7 @@
           "format": "date-time"
         }
       },
-      "required": [
-        "$date"
-      ],
+      "required": ["$date"],
       "additionalProperties": false
     }
   }

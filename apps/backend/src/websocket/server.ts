@@ -1,8 +1,8 @@
-import { ServerWebSocket } from "bun";
 import { verifyToken } from "@clerk/backend";
-import { SessionService } from "../services/sessionService";
-import { WSMessage, WSMessageType } from "../types";
+import type { ServerWebSocket } from "bun";
 import { getDB } from "../config/database";
+import { SessionService } from "../services/sessionService";
+import { type WSMessage, WSMessageType } from "../types";
 
 interface WSClient {
   ws: ServerWebSocket;
@@ -20,14 +20,21 @@ class WebSocketManager {
       // Verify token
       const secretKey = process.env.CLERK_SECRET_KEY;
       if (!secretKey) {
-        ws.send(JSON.stringify({ type: WSMessageType.ERROR, error: "Server configuration error" }));
+        ws.send(
+          JSON.stringify({
+            type: WSMessageType.ERROR,
+            error: "Server configuration error",
+          })
+        );
         ws.close();
         return;
       }
 
       const payload = await verifyToken(token, { secretKey });
       if (!payload) {
-        ws.send(JSON.stringify({ type: WSMessageType.ERROR, error: "Invalid token" }));
+        ws.send(
+          JSON.stringify({ type: WSMessageType.ERROR, error: "Invalid token" })
+        );
         ws.close();
         return;
       }
@@ -36,10 +43,14 @@ class WebSocketManager {
 
       // Get user from database
       const db = getDB();
-      const user = await db.collection("users").findOne({ clerkUserId: userId });
+      const user = await db
+        .collection("users")
+        .findOne({ clerkUserId: userId });
 
       if (!user) {
-        ws.send(JSON.stringify({ type: WSMessageType.ERROR, error: "User not found" }));
+        ws.send(
+          JSON.stringify({ type: WSMessageType.ERROR, error: "User not found" })
+        );
         ws.close();
         return;
       }
@@ -62,7 +73,12 @@ class WebSocketManager {
       );
     } catch (error) {
       console.error("WebSocket connection error:", error);
-      ws.send(JSON.stringify({ type: WSMessageType.ERROR, error: "Authentication failed" }));
+      ws.send(
+        JSON.stringify({
+          type: WSMessageType.ERROR,
+          error: "Authentication failed",
+        })
+      );
       ws.close();
     }
   }
@@ -121,7 +137,9 @@ class WebSocketManager {
         return;
       }
 
-      const isParticipant = session.participants.some((p) => p.userId === client.userId);
+      const isParticipant = session.participants.some(
+        (p) => p.userId === client.userId
+      );
       if (!isParticipant) {
         client.ws.send(
           JSON.stringify({
@@ -200,7 +218,13 @@ class WebSocketManager {
     const { itemType, itemId, direction } = data.data;
 
     // Record swipe in database
-    await SessionService.recordSwipe(client.sessionId, client.userId, itemType, itemId, direction);
+    await SessionService.recordSwipe(
+      client.sessionId,
+      client.userId,
+      itemType,
+      itemId,
+      direction
+    );
 
     // Get updated session to check for matches
     const session = await SessionService.getSession(client.sessionId);
@@ -253,7 +277,12 @@ class WebSocketManager {
     const { message } = data.data;
 
     // Save message to database
-    await SessionService.addMessage(client.sessionId, client.userId, client.username || "", message);
+    await SessionService.addMessage(
+      client.sessionId,
+      client.userId,
+      client.username || "",
+      message
+    );
 
     // Broadcast to all participants
     this.broadcastToSession(client.sessionId, {
@@ -268,7 +297,11 @@ class WebSocketManager {
     });
   }
 
-  private broadcastToSession(sessionId: string, message: WSMessage, excludeUserId?: string) {
+  private broadcastToSession(
+    sessionId: string,
+    message: WSMessage,
+    excludeUserId?: string
+  ) {
     const sessionUserIds = this.sessions.get(sessionId);
 
     if (!sessionUserIds) return;
@@ -323,11 +356,21 @@ export function setupWebSocket() {
           // Handle other messages
           await wsManager.handleMessage((ws as any).userId, message.toString());
         } else {
-          ws.send(JSON.stringify({ type: WSMessageType.ERROR, error: "Not authenticated" }));
+          ws.send(
+            JSON.stringify({
+              type: WSMessageType.ERROR,
+              error: "Not authenticated",
+            })
+          );
         }
       } catch (error) {
         console.error("WebSocket message error:", error);
-        ws.send(JSON.stringify({ type: WSMessageType.ERROR, error: "Invalid message format" }));
+        ws.send(
+          JSON.stringify({
+            type: WSMessageType.ERROR,
+            error: "Invalid message format",
+          })
+        );
       }
     },
 

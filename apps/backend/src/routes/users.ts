@@ -11,6 +11,16 @@ userRoutes.get("/me", async (c) => {
   return c.json(user);
 });
 
+// Get user preferences (for recipe filtering)
+userRoutes.get("/preferences", async (c) => {
+  const user = c.get("user") as User;
+  return c.json({
+    dietaryRestrictions: user.profile.dietaryPreferences || [],
+    cuisinePreferences: user.profile.cuisinePreferences || [],
+    allergies: user.profile.allergies || [],
+  });
+});
+
 // Update user profile
 userRoutes.patch("/me", async (c) => {
   try {

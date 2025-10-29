@@ -1,7 +1,8 @@
 {
   "name": "backend",
   "scripts": {
-    "dev": "bun run --hot src/index.ts"
+    "dev": "bun run --hot src/index.ts",
+    "seed": "bun run src/scripts/seed-recipes.ts"
   },
   "dependencies": {
     "@clerk/backend": "^2.19.0",

@@ -97,7 +97,8 @@ recipeRoutes.get("/swipe/batch", async (c) => {
   try {
     const db = getDB();
     const user = c.get("user") as User;
-    const count = Number.parseInt(c.req.query("count") || "10", 10);
+    const limit = Number.parseInt(c.req.query("limit") || "10", 10);
+    const cursor = c.req.query("cursor");
 
     // Build match criteria based on user preferences
     const matchCriteria: any = { isActive: true };
@@ -113,11 +114,11 @@ recipeRoutes.get("/swipe/batch", async (c) => {
     // Get random recipes using aggregation pipeline
     const recipes = await db
       .collection<Recipe>("recipes")
-      .aggregate([{ $match: matchCriteria }, { $sample: { size: count } }])
+      .aggregate([{ $match: matchCriteria }, { $sample: { size: limit } }])
       .toArray();
 
     // If not enough recipes with preferences, get more random ones
-    if (recipes.length < count) {
+    if (recipes.length < limit) {
       const additionalRecipes = await db
         .collection<Recipe>("recipes")
         .aggregate([
@@ -127,14 +128,19 @@ recipeRoutes.get("/swipe/batch", async (c) => {
               _id: { $nin: recipes.map((r) => r._id) },
             },
           },
-          { $sample: { size: count - recipes.length } },
+          { $sample: { size: limit - recipes.length } },
         ])
         .toArray();
 
       recipes.push(...additionalRecipes);
     }
 
-    return c.json(recipes);
+    // Return in the expected format with pagination info
+    return c.json({
+      recipes,
+      hasMore: true, // For random recipes, we can always get more
+      nextCursor: new Date().getTime().toString(), // Use timestamp as cursor for random batches
+    });
   } catch (error) {
     return c.json({ error: "Failed to fetch recipes for swiping" }, 500);
   }

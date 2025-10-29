@@ -45,6 +45,10 @@ export const useRecipeSwipe = (options: UseRecipeSwipeOptions = {}) => {
     return pendingRefs;
   }, [recipes.length]);
 
+  // State to track auth initialization
+  const [authInitialized, setAuthInitialized] = useState(false);
+  const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
+
   // Initialize service with auth token
   useEffect(() => {
     const initAuth = async () => {
@@ -55,6 +59,8 @@ export const useRecipeSwipe = (options: UseRecipeSwipeOptions = {}) => {
         }
       } catch (error) {
         console.error("Failed to get auth token:", error);
+      } finally {
+        setAuthInitialized(true);
       }
     };
     initAuth();
@@ -62,7 +68,7 @@ export const useRecipeSwipe = (options: UseRecipeSwipeOptions = {}) => {
 
   // Load initial batch of recipes
   const loadRecipes = useCallback(
-    async (isInitial = false) => {
+    async (isInitial = false, cursor?: string) => {
       if (loadingNextBatch.current && !isInitial) return;
 
       loadingNextBatch.current = true;
@@ -70,12 +76,20 @@ export const useRecipeSwipe = (options: UseRecipeSwipeOptions = {}) => {
       setError(null);
 
       try {
+        // Ensure auth is initialized before making API calls
+        if (!authInitialized) {
+          const token = await getToken();
+          if (token) {
+            recipeService.setAuthToken(token);
+          }
+        }
+
         // Get user preferences if not using custom filters
         const effectiveFilters =
           filters || (await recipeService.getUserPreferences());
 
         const response = await recipeService.fetchRecipeBatch(
-          isInitial ? undefined : nextCursor,
+          isInitial ? undefined : cursor || nextCursor,
           effectiveFilters,
           isInitial
         );
@@ -106,24 +120,36 @@ export const useRecipeSwipe = (options: UseRecipeSwipeOptions = {}) => {
         loadingNextBatch.current = false;
       }
     },
-    [filters, nextCursor]
+    [filters, authInitialized, getToken] // Removed nextCursor from dependencies
   );
 
-  // Initial load
+  // Initial load (wait for auth) - only once!
   useEffect(() => {
-    loadRecipes(true);
-  }, []);
+    if (authInitialized && !hasInitiallyLoaded) {
+      setHasInitiallyLoaded(true);
+      loadRecipes(true);
+    }
+  }, [authInitialized, hasInitiallyLoaded, loadRecipes]);
 
-  // Load more when running low on cards
+  // Load more when running low on cards - with debounce
   useEffect(() => {
+    // Only run if initially loaded to avoid startup issues
+    if (!hasInitiallyLoaded) return;
+
     const currentIndex = Math.floor(activeIndex.value);
     const remainingCards = recipes.length - currentIndex;
 
     // Load more when we have less than 5 cards remaining
-    if (remainingCards < 5 && hasMore && !loadingNextBatch.current) {
-      loadRecipes();
+    if (
+      remainingCards < 5 &&
+      hasMore &&
+      !loadingNextBatch.current &&
+      nextCursor &&
+      !isLoading
+    ) {
+      loadRecipes(false, nextCursor);
     }
-  }, [activeIndex.value, recipes.length, hasMore, loadRecipes]);
+  }, [activeIndex.value, recipes.length, hasMore, nextCursor, isLoading, hasInitiallyLoaded]);
 
   // Swipe handlers
   const handleSwipe = useCallback(
@@ -192,8 +218,15 @@ export const useRecipeSwipe = (options: UseRecipeSwipeOptions = {}) => {
       );
     });
 
-    // Reload recipes
-    loadRecipes(true);
+    // Reset cursor and reload recipes
+    setNextCursor(undefined);
+    setHasInitiallyLoaded(false); // Allow a fresh reload
+
+    // Use setTimeout to avoid immediate re-render issues
+    setTimeout(() => {
+      setHasInitiallyLoaded(true);
+      loadRecipes(true);
+    }, 100);
   }, [refs, activeIndex, loadRecipes]);
 
   const undo = useCallback(() => {

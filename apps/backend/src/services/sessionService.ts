@@ -1,6 +1,12 @@
-import { getDB } from "../config/database";
-import { DinnerSession, SessionStatus, SessionParticipant, User, SubscriptionPlan } from "../types";
 import { ObjectId } from "mongodb";
+import { getDB } from "../config/database";
+import {
+  type DinnerSession,
+  type SessionParticipant,
+  SessionStatus,
+  SubscriptionPlan,
+  type User,
+} from "../types";
 
 export class SessionService {
   private static generateSessionCode(): string {
@@ -19,15 +25,19 @@ export class SessionService {
       });
 
       if (activeSessions >= 1) {
-        throw new Error("Free users can only have one active session at a time");
+        throw new Error(
+          "Free users can only have one active session at a time"
+        );
       }
     }
 
-    const sessionExpiryMinutes = parseInt(process.env.SESSION_EXPIRY_MINUTES || "60");
+    const sessionExpiryMinutes = Number.parseInt(
+      process.env.SESSION_EXPIRY_MINUTES || "60"
+    );
     const expiresAt = new Date(Date.now() + sessionExpiryMinutes * 60 * 1000);
 
     const newSession: DinnerSession = {
-      sessionCode: this.generateSessionCode(),
+      sessionCode: SessionService.generateSessionCode(),
       hostUserId: hostUser.clerkUserId,
       participants: [
         {
@@ -50,7 +60,10 @@ export class SessionService {
     return { ...newSession, _id: result.insertedId };
   }
 
-  static async joinSession(sessionCode: string, user: User): Promise<DinnerSession> {
+  static async joinSession(
+    sessionCode: string,
+    user: User
+  ): Promise<DinnerSession> {
     const db = getDB();
     const sessionsCollection = db.collection<DinnerSession>("sessions");
 
@@ -64,7 +77,9 @@ export class SessionService {
     }
 
     // Check if user is already in session
-    const existingParticipant = session.participants.find((p) => p.userId === user.clerkUserId);
+    const existingParticipant = session.participants.find(
+      (p) => p.userId === user.clerkUserId
+    );
     if (existingParticipant) {
       // Update participant status to active
       await sessionsCollection.updateOne(
@@ -103,7 +118,9 @@ export class SessionService {
       }
     );
 
-    const updatedSession = await sessionsCollection.findOne({ _id: session._id });
+    const updatedSession = await sessionsCollection.findOne({
+      _id: session._id,
+    });
     return updatedSession!;
   }
 
@@ -122,7 +139,9 @@ export class SessionService {
     );
 
     // Check if all participants have left
-    const session = await sessionsCollection.findOne({ _id: new ObjectId(sessionId) });
+    const session = await sessionsCollection.findOne({
+      _id: new ObjectId(sessionId),
+    });
     if (session && session.participants.every((p) => !p.isActive)) {
       await sessionsCollection.updateOne(
         { _id: new ObjectId(sessionId) },
@@ -164,7 +183,7 @@ export class SessionService {
 
     // Check for matches if swiped right
     if (direction === "right") {
-      await this.checkForMatches(sessionId, itemType, itemId);
+      await SessionService.checkForMatches(sessionId, itemType, itemId);
     }
   }
 
@@ -176,7 +195,9 @@ export class SessionService {
     const db = getDB();
     const sessionsCollection = db.collection<DinnerSession>("sessions");
 
-    const session = await sessionsCollection.findOne({ _id: new ObjectId(sessionId) });
+    const session = await sessionsCollection.findOne({
+      _id: new ObjectId(sessionId),
+    });
     if (!session) return;
 
     // Find all users who swiped right on this item
@@ -197,7 +218,7 @@ export class SessionService {
       );
 
       if (!existingMatch) {
-        const itemName = await this.getItemName(itemType, itemId);
+        const itemName = await SessionService.getItemName(itemType, itemId);
 
         const match = {
           itemType,
@@ -218,14 +239,24 @@ export class SessionService {
     }
   }
 
-  private static async getItemName(itemType: "recipe" | "restaurant", itemId: string): Promise<string> {
+  private static async getItemName(
+    itemType: "recipe" | "restaurant",
+    itemId: string
+  ): Promise<string> {
     const db = getDB();
     const collection = itemType === "recipe" ? "recipes" : "restaurants";
-    const item = await db.collection(collection).findOne({ _id: new ObjectId(itemId) });
+    const item = await db
+      .collection(collection)
+      .findOne({ _id: new ObjectId(itemId) });
     return item?.title || item?.name || "Unknown";
   }
 
-  static async addMessage(sessionId: string, userId: string, username: string, message: string): Promise<void> {
+  static async addMessage(
+    sessionId: string,
+    userId: string,
+    username: string,
+    message: string
+  ): Promise<void> {
     const db = getDB();
     const sessionsCollection = db.collection<DinnerSession>("sessions");
 
@@ -247,7 +278,9 @@ export class SessionService {
 
   static async getSession(sessionId: string): Promise<DinnerSession | null> {
     const db = getDB();
-    const session = await db.collection<DinnerSession>("sessions").findOne({ _id: new ObjectId(sessionId) });
+    const session = await db
+      .collection<DinnerSession>("sessions")
+      .findOne({ _id: new ObjectId(sessionId) });
     return session;
   }
 

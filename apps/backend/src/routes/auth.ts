@@ -20,7 +20,7 @@ authRoutes.get("/verify", async (c) => {
 
     // This endpoint can be used by the frontend to verify authentication
     // The actual verification happens in the middleware
-    return ac.json({
+    return c.json({
       authenticated: true,
       message: "Token is valid",
     });

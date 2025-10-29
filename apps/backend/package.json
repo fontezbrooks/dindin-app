@@ -6,6 +6,7 @@
   "dependencies": {
     "@clerk/backend": "^2.19.0",
     "@hono/node-ws": "^1.2.0",
+    "@react-native-async-storage/async-storage": "^2.2.0",
     "dotenv": "^17.2.3",
     "hono": "^4.10.3",
     "mongodb": "^6.20.0"

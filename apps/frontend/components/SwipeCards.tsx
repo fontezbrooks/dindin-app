@@ -17,11 +17,12 @@ import { scheduleOnRN } from "react-native-worklets";
 import type { IMAGES } from "../constants/Images";
 
 type SwipeableCardProps = {
-  image: (typeof IMAGES)[0];
+  image?: (typeof IMAGES)[0] | null;
   index: number;
   activeIndex: SharedValue<number>;
   onSwipeRight?: () => void;
   onSwipeLeft?: () => void;
+  children?: React.ReactNode;
 };
 
 export type SwipeableCardRefType = {
@@ -37,7 +38,7 @@ const SwipeableCard = forwardRef<
     //
   },
   SwipeableCardProps
->(({ image, index, activeIndex, onSwipeLeft, onSwipeRight }, ref) => {
+>(({ image, index, activeIndex, onSwipeLeft, onSwipeRight, children }, ref) => {
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const currentActiveIndex = useSharedValue(Math.floor(activeIndex.value));
@@ -200,21 +201,25 @@ const SwipeableCard = forwardRef<
           rCardStyle,
         ]}
       >
-        <View
-          style={{
-            flex: 1,
-            borderRadius: 25,
-            borderCurve: "continuous",
-            overflow: "hidden",
-          }}
-        >
-          <Image
-            cachePolicy={"memory-disk"}
-            contentFit="cover"
-            source={image}
-            style={{ height: "100%", width: "100%" }}
-          />
-        </View>
+        {children ? (
+          children
+        ) : image ? (
+          <View
+            style={{
+              flex: 1,
+              borderRadius: 25,
+              borderCurve: "continuous",
+              overflow: "hidden",
+            }}
+          >
+            <Image
+              cachePolicy={"memory-disk"}
+              contentFit="cover"
+              source={image}
+              style={{ height: "100%", width: "100%" }}
+            />
+          </View>
+        ) : null}
       </Animated.View>
     </GestureDetector>
   );

@@ -1,4 +1,4 @@
-import { MongoClient, Db } from "mongodb";
+import { type Db, MongoClient } from "mongodb";
 
 let client: MongoClient | null = null;
 let db: Db | null = null;
@@ -31,17 +31,25 @@ export async function connectDB(): Promise<Db> {
 
 async function createIndexes(db: Db) {
   // User indexes
-  await db.collection("users").createIndex({ clerkUserId: 1 }, { unique: true });
+  await db
+    .collection("users")
+    .createIndex({ clerkUserId: 1 }, { unique: true });
   await db.collection("users").createIndex({ email: 1 });
 
   // Session indexes
-  await db.collection("sessions").createIndex({ sessionCode: 1 }, { unique: true });
-  await db.collection("sessions").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  await db
+    .collection("sessions")
+    .createIndex({ sessionCode: 1 }, { unique: true });
+  await db
+    .collection("sessions")
+    .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
   await db.collection("sessions").createIndex({ hostUserId: 1 });
   await db.collection("sessions").createIndex({ "participants.userId": 1 });
 
   // Recipe indexes
-  await db.collection("recipes").createIndex({ title: "text", description: "text" });
+  await db
+    .collection("recipes")
+    .createIndex({ title: "text", description: "text" });
   await db.collection("recipes").createIndex({ cuisine: 1 });
   await db.collection("recipes").createIndex({ dietary_tags: 1 });
   await db.collection("recipes").createIndex({ isActive: 1 });

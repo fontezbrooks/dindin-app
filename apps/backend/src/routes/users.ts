@@ -1,7 +1,7 @@
 import { Hono } from "hono";
-import { getDB } from "../config/database";
-import { User } from "../types";
 import { ObjectId } from "mongodb";
+import { getDB } from "../config/database";
+import type { User } from "../types";
 
 const userRoutes = new Hono();
 
@@ -173,7 +173,7 @@ userRoutes.patch("/me/shopping-lists/:listId/items/:itemIndex", async (c) => {
   try {
     const user = c.get("user") as User;
     const listId = c.req.param("listId");
-    const itemIndex = parseInt(c.req.param("itemIndex"));
+    const itemIndex = Number.parseInt(c.req.param("itemIndex"));
     const { checked } = await c.req.json();
     const db = getDB();
 
@@ -198,7 +198,7 @@ userRoutes.patch("/me/shopping-lists/:listId/items/:itemIndex", async (c) => {
 
 // Get dining history
 userRoutes.get("/me/dining-history", async (c) => {
-  const user = c.get("user") as User;
+  const user = (await c.get("user")) as User;
   return c.json(user.profile.diningHistory);
 });
 

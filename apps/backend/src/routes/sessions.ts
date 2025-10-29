@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { SessionService } from "../services/sessionService";
-import { User } from "../types";
+import type { User } from "../types";
 
 const sessionRoutes = new Hono();
 
@@ -44,7 +44,9 @@ sessionRoutes.get("/:sessionId", async (c) => {
 
     // Check if user is participant
     const user = c.get("user") as User;
-    const isParticipant = session.participants.some((p) => p.userId === user.clerkUserId);
+    const isParticipant = session.participants.some(
+      (p) => p.userId === user.clerkUserId
+    );
 
     if (!isParticipant) {
       return c.json({ error: "Not authorized to view this session" }, 403);
@@ -76,7 +78,7 @@ sessionRoutes.post("/:sessionId/swipe", async (c) => {
     const user = c.get("user") as User;
     const { itemType, itemId, direction } = await c.req.json();
 
-    if (!itemType || !itemId || !direction) {
+    if (!(itemType && itemId && direction)) {
       return c.json({ error: "Missing required fields" }, 400);
     }
 
@@ -88,7 +90,13 @@ sessionRoutes.post("/:sessionId/swipe", async (c) => {
       return c.json({ error: "Invalid swipe direction" }, 400);
     }
 
-    await SessionService.recordSwipe(sessionId, user.clerkUserId, itemType, itemId, direction);
+    await SessionService.recordSwipe(
+      sessionId,
+      user.clerkUserId,
+      itemType,
+      itemId,
+      direction
+    );
     return c.json({ message: "Swipe recorded" });
   } catch (error: any) {
     return c.json({ error: error.message }, 500);
@@ -107,7 +115,9 @@ sessionRoutes.get("/:sessionId/matches", async (c) => {
 
     // Check if user is participant
     const user = c.get("user") as User;
-    const isParticipant = session.participants.some((p) => p.userId === user.clerkUserId);
+    const isParticipant = session.participants.some(
+      (p) => p.userId === user.clerkUserId
+    );
 
     if (!isParticipant) {
       return c.json({ error: "Not authorized" }, 403);
@@ -130,7 +140,12 @@ sessionRoutes.post("/:sessionId/messages", async (c) => {
       return c.json({ error: "Message is required" }, 400);
     }
 
-    await SessionService.addMessage(sessionId, user.clerkUserId, user.username || user.email, message);
+    await SessionService.addMessage(
+      sessionId,
+      user.clerkUserId,
+      user.username || user.email,
+      message
+    );
     return c.json({ message: "Message sent" });
   } catch (error: any) {
     return c.json({ error: error.message }, 500);

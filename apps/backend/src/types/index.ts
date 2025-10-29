@@ -1,7 +1,7 @@
-import { ObjectId } from "mongodb";
+import type { ObjectId } from "mongodb";
 
 // User types
-export interface User {
+export type User = {
   _id?: ObjectId;
   clerkUserId: string;
   email: string;
@@ -10,9 +10,9 @@ export interface User {
   subscription: SubscriptionPlan;
   createdAt: Date;
   updatedAt: Date;
-}
+};
 
-export interface UserProfile {
+export type UserProfile = {
   dietaryPreferences: string[];
   cuisinePreferences: string[];
   allergies?: string[];
@@ -20,32 +20,32 @@ export interface UserProfile {
   savedRestaurants: ObjectId[];
   shoppingLists: ShoppingList[];
   diningHistory: DiningHistoryEntry[];
-}
+};
 
-export interface ShoppingList {
+export type ShoppingList = {
   _id?: ObjectId;
   recipeId: ObjectId;
   recipeName: string;
   ingredients: ShoppingListIngredient[];
   createdAt: Date;
   completedAt?: Date;
-}
+};
 
-export interface ShoppingListIngredient {
+export type ShoppingListIngredient = {
   name: string;
   amount: string;
   unit: string;
   checked: boolean;
-}
+};
 
-export interface DiningHistoryEntry {
+export type DiningHistoryEntry = {
   type: "recipe" | "restaurant";
   itemId: ObjectId;
   itemName: string;
   date: Date;
   rating?: number;
   notes?: string;
-}
+};
 
 export enum SubscriptionPlan {
   FREE = "free",
@@ -53,7 +53,7 @@ export enum SubscriptionPlan {
 }
 
 // Session types
-export interface DinnerSession {
+export type DinnerSession = {
   _id?: ObjectId;
   sessionCode: string;
   hostUserId: string;
@@ -65,14 +65,14 @@ export interface DinnerSession {
   expiresAt: Date;
   createdAt: Date;
   updatedAt: Date;
-}
+};
 
-export interface SessionParticipant {
+export type SessionParticipant = {
   userId: string;
   username: string;
   joinedAt: Date;
   isActive: boolean;
-}
+};
 
 export enum SessionStatus {
   WAITING = "waiting",
@@ -81,31 +81,31 @@ export enum SessionStatus {
   EXPIRED = "expired",
 }
 
-export interface SwipeData {
+export type SwipeData = {
   userId: string;
   itemType: "recipe" | "restaurant";
   itemId: ObjectId;
   direction: "left" | "right";
   timestamp: Date;
-}
+};
 
-export interface Match {
+export type Match = {
   itemType: "recipe" | "restaurant";
   itemId: ObjectId;
   itemName: string;
   matchedUsers: string[];
   matchedAt: Date;
-}
+};
 
-export interface SessionMessage {
+export type SessionMessage = {
   userId: string;
   username: string;
   message: string;
   timestamp: Date;
-}
+};
 
 // Restaurant types (mock for now)
-export interface Restaurant {
+export type Restaurant = {
   _id?: ObjectId;
   name: string;
   cuisine: string[];
@@ -117,9 +117,9 @@ export interface Restaurant {
   hours?: RestaurantHours;
   tags: string[];
   isActive: boolean;
-}
+};
 
-export interface RestaurantHours {
+export type RestaurantHours = {
   monday: string;
   tuesday: string;
   wednesday: string;
@@ -127,10 +127,10 @@ export interface RestaurantHours {
   friday: string;
   saturday: string;
   sunday: string;
-}
+};
 
 // Recipe type (from your schema)
-export interface Recipe {
+export type Recipe = {
   _id?: ObjectId;
   title: string;
   description: string;
@@ -149,44 +149,44 @@ export interface Recipe {
   tags: string[];
   likes: number;
   isActive: boolean;
-}
+};
 
-export interface RecipeIngredient {
+export type RecipeIngredient = {
   name: string;
   amount: string;
   unit: string;
-}
+};
 
-export interface RecipeInstruction {
+export type RecipeInstruction = {
   step: number;
   description: string;
-}
+};
 
-export interface NutritionInfo {
+export type NutritionInfo = {
   calories: number;
   protein: number;
   carbs: number;
   fat: number;
   fiber: number;
   sugar: number;
-}
+};
 
 // Auth types
-export interface ClerkUser {
+export type ClerkUser = {
   id: string;
   emailAddresses: Array<{
     emailAddress: string;
   }>;
   username?: string;
-}
+};
 
 // WebSocket types
-export interface WSMessage {
+export type WSMessage = {
   type: WSMessageType;
   sessionId: string;
   userId: string;
   data: any;
-}
+};
 
 export enum WSMessageType {
   JOIN_SESSION = "join_session",

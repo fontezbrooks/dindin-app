@@ -1,13 +1,13 @@
-import { Context, Next } from "hono";
 import { verifyToken } from "@clerk/backend";
+import type { Context, Next } from "hono";
 import { getDB } from "../config/database";
-import { User, SubscriptionPlan } from "../types";
+import { SubscriptionPlan, type User } from "../types";
 
 export async function authMiddleware(c: Context, next: Next) {
   try {
     const authHeader = c.req.header("Authorization");
 
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    if (!(authHeader && authHeader.startsWith("Bearer "))) {
       return c.json({ error: "Unauthorized - No token provided" }, 401);
     }
 

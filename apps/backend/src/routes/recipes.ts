@@ -1,7 +1,7 @@
 import { Hono } from "hono";
-import { getDB } from "../config/database";
-import { Recipe, User } from "../types";
 import { ObjectId } from "mongodb";
+import { getDB } from "../config/database";
+import type { Recipe, User } from "../types";
 
 const recipeRoutes = new Hono();
 
@@ -16,8 +16,8 @@ recipeRoutes.get("/", async (c) => {
     const dietaryTags = c.req.query("dietary")?.split(",");
     const difficulty = c.req.query("difficulty");
     const search = c.req.query("search");
-    const limit = parseInt(c.req.query("limit") || "20");
-    const skip = parseInt(c.req.query("skip") || "0");
+    const limit = Number.parseInt(c.req.query("limit") || "20", 10);
+    const skip = Number.parseInt(c.req.query("skip") || "0", 10);
 
     // Build query
     const query: any = { isActive: true };
@@ -39,7 +39,7 @@ recipeRoutes.get("/", async (c) => {
     }
 
     // Apply user preferences if no specific filters
-    if (!cuisine && !dietaryTags && !search) {
+    if (!(cuisine || dietaryTags || search)) {
       if (user.profile.cuisinePreferences.length > 0) {
         query.cuisine = { $in: user.profile.cuisinePreferences };
       }
@@ -97,7 +97,7 @@ recipeRoutes.get("/swipe/batch", async (c) => {
   try {
     const db = getDB();
     const user = c.get("user") as User;
-    const count = parseInt(c.req.query("count") || "10");
+    const count = Number.parseInt(c.req.query("count") || "10", 10);
 
     // Build match criteria based on user preferences
     const matchCriteria: any = { isActive: true };
@@ -113,10 +113,7 @@ recipeRoutes.get("/swipe/batch", async (c) => {
     // Get random recipes using aggregation pipeline
     const recipes = await db
       .collection<Recipe>("recipes")
-      .aggregate([
-        { $match: matchCriteria },
-        { $sample: { size: count } },
-      ])
+      .aggregate([{ $match: matchCriteria }, { $sample: { size: count } }])
       .toArray();
 
     // If not enough recipes with preferences, get more random ones
@@ -124,7 +121,12 @@ recipeRoutes.get("/swipe/batch", async (c) => {
       const additionalRecipes = await db
         .collection<Recipe>("recipes")
         .aggregate([
-          { $match: { isActive: true, _id: { $nin: recipes.map((r) => r._id) } } },
+          {
+            $match: {
+              isActive: true,
+              _id: { $nin: recipes.map((r) => r._id) },
+            },
+          },
           { $sample: { size: count - recipes.length } },
         ])
         .toArray();
@@ -146,7 +148,9 @@ recipeRoutes.get("/recommendations", async (c) => {
 
     // Get user's liked recipes from dining history
     const likedRecipes = user.profile.diningHistory
-      .filter((entry) => entry.type === "recipe" && entry.rating && entry.rating >= 4)
+      .filter(
+        (entry) => entry.type === "recipe" && entry.rating && entry.rating >= 4
+      )
       .map((entry) => entry.itemId);
 
     if (likedRecipes.length === 0) {
@@ -193,10 +197,9 @@ recipeRoutes.post("/:recipeId/like", async (c) => {
     const recipeId = c.req.param("recipeId");
     const db = getDB();
 
-    await db.collection<Recipe>("recipes").updateOne(
-      { _id: new ObjectId(recipeId) },
-      { $inc: { likes: 1 } }
-    );
+    await db
+      .collection<Recipe>("recipes")
+      .updateOne({ _id: new ObjectId(recipeId) }, { $inc: { likes: 1 } });
 
     return c.json({ message: "Recipe liked" });
   } catch (error) {
@@ -210,10 +213,12 @@ recipeRoutes.get("/:recipeId/nutrition", async (c) => {
     const recipeId = c.req.param("recipeId");
     const db = getDB();
 
-    const recipe = await db.collection<Recipe>("recipes").findOne(
-      { _id: new ObjectId(recipeId), isActive: true },
-      { projection: { nutrition: 1 } }
-    );
+    const recipe = await db
+      .collection<Recipe>("recipes")
+      .findOne(
+        { _id: new ObjectId(recipeId), isActive: true },
+        { projection: { nutrition: 1 } }
+      );
 
     if (!recipe) {
       return c.json({ error: "Recipe not found" }, 404);

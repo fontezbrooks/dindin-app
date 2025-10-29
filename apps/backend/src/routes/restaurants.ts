@@ -1,7 +1,7 @@
 import { Hono } from "hono";
-import { getDB } from "../config/database";
-import { Restaurant, User } from "../types";
 import { ObjectId } from "mongodb";
+import { getDB } from "../config/database";
+import type { Restaurant, User } from "../types";
 
 const restaurantRoutes = new Hono();
 
@@ -16,8 +16,8 @@ restaurantRoutes.get("/", async (c) => {
     const priceRange = c.req.query("price");
     const minRating = c.req.query("minRating");
     const search = c.req.query("search");
-    const limit = parseInt(c.req.query("limit") || "20");
-    const skip = parseInt(c.req.query("skip") || "0");
+    const limit = Number.parseInt(c.req.query("limit") || "20");
+    const skip = Number.parseInt(c.req.query("skip") || "0");
 
     // Build query
     const query: any = { isActive: true };
@@ -27,11 +27,11 @@ restaurantRoutes.get("/", async (c) => {
     }
 
     if (priceRange) {
-      query.priceRange = parseInt(priceRange);
+      query.priceRange = Number.parseInt(priceRange);
     }
 
     if (minRating) {
-      query.rating = { $gte: parseFloat(minRating) };
+      query.rating = { $gte: Number.parseFloat(minRating) };
     }
 
     if (search) {
@@ -39,7 +39,7 @@ restaurantRoutes.get("/", async (c) => {
     }
 
     // Apply user preferences if no specific filters
-    if (!cuisine && !search && user.profile.cuisinePreferences.length > 0) {
+    if (!(cuisine || search) && user.profile.cuisinePreferences.length > 0) {
       query.cuisine = { $in: user.profile.cuisinePreferences };
     }
 
@@ -50,7 +50,9 @@ restaurantRoutes.get("/", async (c) => {
       .skip(skip)
       .toArray();
 
-    const total = await db.collection<Restaurant>("restaurants").countDocuments(query);
+    const total = await db
+      .collection<Restaurant>("restaurants")
+      .countDocuments(query);
 
     return c.json({
       restaurants,
@@ -92,7 +94,7 @@ restaurantRoutes.get("/swipe/batch", async (c) => {
   try {
     const db = getDB();
     const user = c.get("user") as User;
-    const count = parseInt(c.req.query("count") || "10");
+    const count = Number.parseInt(c.req.query("count") || "10");
 
     // Build match criteria based on user preferences
     const matchCriteria: any = { isActive: true };
@@ -104,10 +106,7 @@ restaurantRoutes.get("/swipe/batch", async (c) => {
     // Get random restaurants using aggregation pipeline
     const restaurants = await db
       .collection<Restaurant>("restaurants")
-      .aggregate([
-        { $match: matchCriteria },
-        { $sample: { size: count } },
-      ])
+      .aggregate([{ $match: matchCriteria }, { $sample: { size: count } }])
       .toArray();
 
     // If not enough restaurants with preferences, get more random ones
@@ -115,7 +114,12 @@ restaurantRoutes.get("/swipe/batch", async (c) => {
       const additionalRestaurants = await db
         .collection<Restaurant>("restaurants")
         .aggregate([
-          { $match: { isActive: true, _id: { $nin: restaurants.map((r) => r._id) } } },
+          {
+            $match: {
+              isActive: true,
+              _id: { $nin: restaurants.map((r) => r._id) },
+            },
+          },
           { $sample: { size: count - restaurants.length } },
         ])
         .toArray();
@@ -137,7 +141,10 @@ restaurantRoutes.get("/recommendations", async (c) => {
 
     // Get user's liked restaurants from dining history
     const likedRestaurants = user.profile.diningHistory
-      .filter((entry) => entry.type === "restaurant" && entry.rating && entry.rating >= 4)
+      .filter(
+        (entry) =>
+          entry.type === "restaurant" && entry.rating && entry.rating >= 4
+      )
       .map((entry) => entry.itemId);
 
     if (likedRestaurants.length === 0) {
@@ -158,9 +165,12 @@ restaurantRoutes.get("/recommendations", async (c) => {
       .find({ _id: { $in: likedRestaurants } })
       .toArray();
 
-    const cuisines = [...new Set(likedRestaurantDetails.flatMap((r) => r.cuisine))];
+    const cuisines = [
+      ...new Set(likedRestaurantDetails.flatMap((r) => r.cuisine)),
+    ];
     const avgPriceRange = Math.round(
-      likedRestaurantDetails.reduce((sum, r) => sum + r.priceRange, 0) / likedRestaurantDetails.length
+      likedRestaurantDetails.reduce((sum, r) => sum + r.priceRange, 0) /
+        likedRestaurantDetails.length
     );
 
     // Find similar restaurants
@@ -171,7 +181,11 @@ restaurantRoutes.get("/recommendations", async (c) => {
         _id: { $nin: likedRestaurants },
         $or: [
           { cuisine: { $in: cuisines } },
-          { priceRange: { $in: [avgPriceRange - 1, avgPriceRange, avgPriceRange + 1] } },
+          {
+            priceRange: {
+              $in: [avgPriceRange - 1, avgPriceRange, avgPriceRange + 1],
+            },
+          },
         ],
       })
       .limit(10)
@@ -189,7 +203,9 @@ restaurantRoutes.post("/seed", async (c) => {
     const db = getDB();
 
     // Check if already seeded
-    const count = await db.collection<Restaurant>("restaurants").countDocuments();
+    const count = await db
+      .collection<Restaurant>("restaurants")
+      .countDocuments();
     if (count > 0) {
       return c.json({ message: "Restaurants already seeded" });
     }

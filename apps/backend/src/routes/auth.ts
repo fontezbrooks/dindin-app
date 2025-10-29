@@ -1,6 +1,4 @@
 import { Hono } from "hono";
-import { getDB } from "../config/database";
-import { User, SubscriptionPlan } from "../types";
 
 const authRoutes = new Hono();
 
@@ -8,7 +6,7 @@ const authRoutes = new Hono();
 authRoutes.post("/webhook", async (c) => {
   // TODO: Implement Clerk webhook verification
   // This will handle user.created, user.updated, user.deleted events
-  return c.json({ message: "Webhook endpoint - to be implemented" });
+  return await c.json({ message: "Webhook endpoint - to be implemented" });
 });
 
 // Verify token and get user info
@@ -16,13 +14,13 @@ authRoutes.get("/verify", async (c) => {
   try {
     const authHeader = c.req.header("Authorization");
 
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return c.json({ error: "No token provided" }, 401);
+    if (!authHeader?.startsWith("Bearer ")) {
+      return await c.json({ error: "No token provided" }, 401);
     }
 
     // This endpoint can be used by the frontend to verify authentication
     // The actual verification happens in the middleware
-    return c.json({
+    return ac.json({
       authenticated: true,
       message: "Token is valid",
     });

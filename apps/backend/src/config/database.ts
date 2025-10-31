@@ -1,36 +1,30 @@
-import { ConsoleTransport, LogLayer } from "loglayer";
 import { type Db, MongoClient } from "mongodb";
 
-let client: MongoClient | null = null;
-let db: Db | null = null;
+let client: MongoClient;
+let db: Db;
 
 export async function connectDB(): Promise<Db> {
-  const log = new LogLayer({
-    transport: new ConsoleTransport({
-      logger: console,
-    }),
-  });
   if (db) {
     return db;
   }
 
   try {
-    const uri = process.env.MONGODB_URI || "mongodb://localhost:27017/dindin";
-    const dbName = process.env.DATABASE_NAME || "dindin";
+    const uri = process.env.MONGODB_URI || "";
+    const dbName = process.env.DATABASE_NAME || "";
 
     client = new MongoClient(uri);
     await client.connect();
 
     db = client.db(dbName);
 
-    log.info(`\ud83d\udc4d MongoDB connected to database: ${dbName}`);
+    console.log(`👍 MongoDB connected to database: ${dbName}`);
 
     // Create indexes
     await createIndexes(db);
 
     return db;
   } catch (error) {
-    log.error(`MongoDB connection error: ${error}`);
+    console.error(`MongoDB connection error: ${error}`);
     throw error;
   }
 }

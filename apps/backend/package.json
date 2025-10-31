@@ -10,10 +10,17 @@
   "dependencies": {
     "@clerk/backend": "^2.19.0",
     "@hono/node-ws": "^1.2.0",
+    "@opentelemetry/exporter-prometheus": "^0.207.0",
     "@react-native-async-storage/async-storage": "^2.2.0",
+    "cron": "^4.3.3",
     "dotenv": "^17.2.3",
     "hono": "^4.10.3",
-    "mongodb": "^6.20.0"
+    "inversify": "^7.10.4",
+    "ioredis": "^5.8.2",
+    "mongodb": "^6.20.0",
+    "rate-limiter-flexible": "^8.1.0",
+    "winston": "^3.18.3",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@types/bun": "latest"

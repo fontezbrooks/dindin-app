@@ -12,13 +12,16 @@
     "eas:dev": "eas build --platform ios --profile development",
     "format": "biome format --write --reporter=rdjson",
     "lint": "biome lint --write --reporter=rdjson",
-    "imports": "biome check --write --reporter=rdjson"
+    "imports": "biome check --write --reporter=rdjson",
+    "test": "jest"
   },
   "dependencies": {
     "@clerk/clerk-expo": "^2.17.1",
     "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-navigation/native": "^7.1.8",
+    "@sentry/react-native": "^7.4.0",
+    "@shopify/flash-list": "^2.2.0",
     "@shopify/react-native-skia": "^2.3.7",
     "dotenv": "^17.2.3",
     "expo": "~54.0.20",
@@ -45,11 +48,16 @@
     "react-native-screens": "~4.16.0",
     "react-native-skia-gesture": "^0.4.0",
     "react-native-web": "~0.21.0",
-    "react-native-worklets": "0.5.1"
+    "react-native-worklets": "0.5.1",
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@testing-library/react-native": "^13.3.3",
+    "@types/jest": "^30.0.0",
     "@types/react": "~19.1.0",
+    "jest": "^30.2.0",
     "react-test-renderer": "19.1.0",
+    "ts-jest": "^29.4.5",
     "typescript": "~5.9.2"
   },
   "private": true

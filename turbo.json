@@ -16,11 +16,17 @@
     "eas:dev": {
       "dependsOn": ["^eas:dev"]
     },
+    "seed": {
+      "dependsOn": ["^seed"]
+    },
+    "format": {
+      "dependsOn": ["^format"]
+    },
     "lint": {
       "dependsOn": ["^lint"]
     },
-    "seed": {
-      "dependsOn": ["^seed"]
+    "imports": {
+      "dependsOn": ["^imports"]
     },
     "check-types": {
       "dependsOn": ["^check-types"]

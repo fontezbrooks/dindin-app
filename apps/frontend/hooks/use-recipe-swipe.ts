@@ -149,7 +149,14 @@ export const useRecipeSwipe = (options: UseRecipeSwipeOptions = {}) => {
     ) {
       loadRecipes(false, nextCursor);
     }
-  }, [activeIndex.value, recipes.length, hasMore, nextCursor, isLoading, hasInitiallyLoaded]);
+  }, [
+    activeIndex.value,
+    recipes.length,
+    hasMore,
+    nextCursor,
+    isLoading,
+    hasInitiallyLoaded,
+  ]);
 
   // Swipe handlers
   const handleSwipe = useCallback(

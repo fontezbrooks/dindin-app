@@ -34,5 +34,8 @@
       "apps/*",
       "packages/*"
     ]
+  },
+  "dependencies": {
+    "loglayer": "^6.10.0"
   }
 }

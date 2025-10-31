@@ -12,8 +12,10 @@ type RecipeCardProps = {
 };
 
 const { width: screenWidth } = Dimensions.get("window");
-const CARD_WIDTH = screenWidth * 0.9;
-const CARD_HEIGHT = CARD_WIDTH * 1.4;
+const cardWidthFactor = 0.9;
+const CARD_WIDTH = screenWidth * cardWidthFactor;
+const heightMultiplier = 1.4;
+const CARD_HEIGHT = CARD_WIDTH * heightMultiplier;
 
 // Default fallback image
 const FALLBACK_IMAGE =

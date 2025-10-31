@@ -1,22 +1,31 @@
 import { useSignUp } from "@clerk/clerk-expo";
 import { Link, useRouter } from "expo-router";
-import * as React from "react";
+import { ConsoleTransport, LogLayer } from "loglayer";
+import { useState } from "react";
 import { Text, TextInput, TouchableOpacity, View } from "react-native";
 
 export default function SignUpScreen() {
+  const log = new LogLayer({
+    transport: new ConsoleTransport({
+      logger: console,
+    }),
+  });
+
   const { isLoaded, signUp, setActive } = useSignUp();
   const router = useRouter();
 
-  const [emailAddress, setEmailAddress] = React.useState("");
-  const [password, setPassword] = React.useState("");
-  const [pendingVerification, setPendingVerification] = React.useState(false);
-  const [code, setCode] = React.useState("");
+  const [emailAddress, setEmailAddress] = useState("");
+  const [password, setPassword] = useState("");
+  const [pendingVerification, setPendingVerification] = useState(false);
+  const [code, setCode] = useState("");
 
   // Handle submission of sign-up form
   const onSignUpPress = async () => {
-    if (!isLoaded) return;
+    if (!isLoaded) {
+      return;
+    }
 
-    console.log(emailAddress, password);
+    log.info(emailAddress, password);
 
     // Start sign-up process using email and password provided
     try {
@@ -34,13 +43,15 @@ export default function SignUpScreen() {
     } catch (err) {
       // See https://clerk.com/docs/guides/development/custom-flows/error-handling
       // for more info on error handling
-      console.error(JSON.stringify(err, null, 2));
+      log.withError(new Error(JSON.stringify(err, null, 2)));
     }
   };
 
   // Handle submission of verification form
   const onVerifyPress = async () => {
-    if (!isLoaded) return;
+    if (!isLoaded) {
+      return;
+    }
 
     try {
       // Use the code the user provided to attempt verification
@@ -56,12 +67,12 @@ export default function SignUpScreen() {
       } else {
         // If the status is not complete, check why. User may need to
         // complete further steps.
-        console.error(JSON.stringify(signUpAttempt, null, 2));
+        log.withError(new Error(JSON.stringify(signUpAttempt, null, 2)));
       }
     } catch (err) {
       // See https://clerk.com/docs/guides/development/custom-flows/error-handling
       // for more info on error handling
-      console.error(JSON.stringify(err, null, 2));
+      log.withError(new Error(JSON.stringify(err, null, 2)));
     }
   };
 
@@ -70,7 +81,7 @@ export default function SignUpScreen() {
       <>
         <Text>Verify your email</Text>
         <TextInput
-          onChangeText={(code) => setCode(code)}
+          onChangeText={(_code) => setCode(_code)}
           placeholder="Enter your verification code"
           value={code}
         />
@@ -91,7 +102,7 @@ export default function SignUpScreen() {
         value={emailAddress}
       />
       <TextInput
-        onChangeText={(password) => setPassword(password)}
+        onChangeText={(_password) => setPassword(_password)}
         placeholder="Enter password"
         secureTextEntry={true}
         value={password}

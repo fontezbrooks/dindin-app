@@ -1,9 +1,15 @@
 import { useSignIn } from "@clerk/clerk-expo";
 import { Link, useRouter } from "expo-router";
+import { ConsoleTransport, LogLayer } from "loglayer";
 import React from "react";
 import { Text, TextInput, TouchableOpacity, View } from "react-native";
 
 export default function Page() {
+  const log = new LogLayer({
+    transport: new ConsoleTransport({
+      logger: console,
+    }),
+  });
   const { signIn, setActive, isLoaded } = useSignIn();
   const router = useRouter();
 
@@ -12,7 +18,9 @@ export default function Page() {
 
   // Handle the submission of the sign-in form
   const onSignInPress = async () => {
-    if (!isLoaded) return;
+    if (!isLoaded) {
+      return;
+    }
 
     // Start the sign-in process using the email and password provided
     try {
@@ -29,12 +37,12 @@ export default function Page() {
       } else {
         // If the status isn't complete, check why. User might need to
         // complete further steps.
-        console.error(JSON.stringify(signInAttempt, null, 2));
+        log.withError(new Error(JSON.stringify(signInAttempt, null, 2)));
       }
     } catch (err) {
       // See https://clerk.com/docs/guides/development/custom-flows/error-handling
       // for more info on error handling
-      console.error(JSON.stringify(err, null, 2));
+      log.withError(new Error(JSON.stringify(err, null, 2)));
     }
   };
 
@@ -43,12 +51,12 @@ export default function Page() {
       <Text>Sign in</Text>
       <TextInput
         autoCapitalize="none"
-        onChangeText={(emailAddress) => setEmailAddress(emailAddress)}
+        onChangeText={(_emailAddress) => setEmailAddress(_emailAddress)}
         placeholder="Enter email"
         value={emailAddress}
       />
       <TextInput
-        onChangeText={(password) => setPassword(password)}
+        onChangeText={(_password) => setPassword(_password)}
         placeholder="Enter password"
         secureTextEntry={true}
         value={password}

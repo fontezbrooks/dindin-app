@@ -4,8 +4,10 @@ import { useEffect, useRef } from "react";
 import { Animated, Dimensions, StyleSheet, View } from "react-native";
 
 const { width: screenWidth } = Dimensions.get("window");
-const CARD_WIDTH = screenWidth * 0.9;
-const CARD_HEIGHT = CARD_WIDTH * 1.4;
+const cardWidthMultiplier = 0.9;
+const CARD_WIDTH = screenWidth * cardWidthMultiplier;
+const heightMultiplier = 1.4;
+const CARD_HEIGHT = CARD_WIDTH * heightMultiplier;
 
 export const RecipeCardSkeleton: React.FC = () => {
   const shimmerAnim = useRef(new Animated.Value(0)).current;

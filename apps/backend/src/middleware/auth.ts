@@ -1,5 +1,6 @@
 import { verifyToken } from "@clerk/backend";
 import type { Context, Next } from "hono";
+import { logger } from "hono/logger";
 import { getDB } from "../config/database";
 import { SubscriptionPlan, type User } from "../types";
 
@@ -65,7 +66,7 @@ export async function authMiddleware(c: Context, next: Next) {
 
     await next();
   } catch (error) {
-    console.error("Auth middleware error:", error);
+    logger(() => `Auth middleware error: ${error}`);
     return c.json({ error: "Authentication failed" }, 401);
   }
 }

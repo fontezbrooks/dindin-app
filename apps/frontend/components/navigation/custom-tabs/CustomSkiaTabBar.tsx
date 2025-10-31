@@ -24,7 +24,8 @@ export function CustomSkiaTabBar() {
   const { width: screenWidth } = useWindowDimensions();
   const { bottom } = useSafeAreaInsets();
 
-  const bottomTabBarHeight = 45 + bottom / 2;
+  const fortyFive = 45;
+  const bottomTabBarHeight = fortyFive + bottom / 2;
   const tabCount = 3;
 
   const animatedIndex = useDerivedValue(
@@ -44,7 +45,7 @@ export function CustomSkiaTabBar() {
     path.addRect(
       rect(
         -10,
-        45,
+        fortyFive,
         screenWidth + BOTTOM_BAR_HEIGHT_OFFSET,
         bottomTabBarHeight + BOTTOM_BAR_HEIGHT_OFFSET
       )

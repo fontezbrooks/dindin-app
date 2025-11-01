@@ -1,6 +1,6 @@
-import { readFileSync } from "fs";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { MongoClient } from "mongodb";
-import { resolve } from "path";
 
 async function seedRecipes() {
   const uri = process.env.MONGODB_URI || "mongodb://localhost:27017/dindin";
@@ -23,7 +23,7 @@ async function seedRecipes() {
     }
 
     // Read recipes from JSON file
-    const jsonPath = resolve(
+    const _jsonPath = resolve(
       __dirname,
       "apps/backend/src/scripts/dindin-app.recipes.json"
     );

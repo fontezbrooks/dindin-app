@@ -35,26 +35,14 @@ export function cacheMiddleware(options: CacheMiddlewareOptions = {}) {
 
     // Check if cache service is healthy
     if (!cache.isHealthy()) {
-      // If cache is not available, continue without caching
       return next();
     }
 
-    // Generate cache key
     const cacheKey = keyGenerator(c);
 
     // Handle cache invalidation for mutation operations
     if (invalidateOn.includes(method)) {
-      await next();
-
-      // Invalidate related cache entries after successful mutation
-      if (
-        c.res.status >= HTTPStatus.OK &&
-        c.res.status < HTTPStatus.MULTIPLE_CHOICES
-      ) {
-        await cache.flushPattern(`${cacheKey}*`);
-        log.debug(`Cache invalidated for pattern: ${cacheKey}*`);
-      }
-
+      await handleCacheInvalidation(c, next, cache, cacheKey);
       return;
     }
 
@@ -66,42 +54,78 @@ export function cacheMiddleware(options: CacheMiddlewareOptions = {}) {
     // Try to get from cache
     const cached = await cache.get(cacheKey);
     if (cached) {
-      log.debug(`Cache hit for key: ${cacheKey}`);
+      return handleCacheHit(c, cached, cacheKey);
+    }
+
+    // Handle cache miss
+    await handleCacheMiss(c, next, cache, cacheKey, ttl);
+  };
+}
+
+// Helper function to handle cache invalidation
+async function handleCacheInvalidation(
+  c: Context,
+  next: Next,
+  cache: ReturnType<typeof getCacheService>,
+  cacheKey: string
+) {
+  await next();
+
+  // Invalidate related cache entries after successful mutation
+  if (
+    c.res.status >= HTTPStatus.OK &&
+    c.res.status < HTTPStatus.MULTIPLE_CHOICES
+  ) {
+    await cache.flushPattern(`${cacheKey}*`);
+    log.debug(`Cache invalidated for pattern: ${cacheKey}*`);
+  }
+}
+
+// Helper function to handle cache hit
+function handleCacheHit(c: Context, cached: unknown, cacheKey: string) {
+  log.debug(`Cache hit for key: ${cacheKey}`);
+
+  // Set cache headers
+  c.header("X-Cache", "HIT");
+  c.header("X-Cache-Key", cacheKey);
+
+  // Return cached response
+  return c.json(cached);
+}
+
+// Helper function to handle cache miss
+async function handleCacheMiss(
+  c: Context,
+  next: Next,
+  cache: ReturnType<typeof getCacheService>,
+  cacheKey: string,
+  ttl: number
+) {
+  log.debug(`Cache miss for key: ${cacheKey}`);
+
+  // Execute route handler
+  await next();
+
+  // Cache successful responses
+  if (
+    c.res.status >= HTTPStatus.OK &&
+    c.res.status < HTTPStatus.MULTIPLE_CHOICES
+  ) {
+    try {
+      // Clone response to read body
+      const response = c.res.clone();
+      const body = await response.json();
+
+      // Store in cache
+      await cache.set(cacheKey, body, ttl);
 
       // Set cache headers
-      c.header("X-Cache", "HIT");
+      c.header("X-Cache", "MISS");
       c.header("X-Cache-Key", cacheKey);
-
-      // Return cached response
-      return c.json(cached);
+    } catch (error) {
+      log.error(`Error caching response: ${error}`);
     }
-
-    log.debug(`Cache miss for key: ${cacheKey}`);
-
-    // Execute route handler
-    await next();
-
-    // Cache successful responses
-    if (
-      c.res.status >= HTTPStatus.OK &&
-      c.res.status < HTTPStatus.MULTIPLE_CHOICES
-    ) {
-      try {
-        // Clone response to read body
-        const response = c.res.clone();
-        const body = await response.json();
-
-        // Store in cache
-        await cache.set(cacheKey, body, ttl);
-
-        // Set cache headers
-        c.header("X-Cache", "MISS");
-        c.header("X-Cache-Key", cacheKey);
-      } catch (error) {
-        log.error(`Error caching response: ${error}`);
-      }
-    }
-  };
+  }
 }
 
 /**

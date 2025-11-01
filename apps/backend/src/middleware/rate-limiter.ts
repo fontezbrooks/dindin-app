@@ -1,7 +1,9 @@
 import type { Context, Next } from "hono";
 import { ConsoleTransport, LogLayer } from "loglayer";
+import { HTTP_STATUS } from "../constants/http-status";
 import { getCacheService } from "../services/cache";
-import { Calculations, HTTPStatus } from "../types";
+import type { User } from "../types";
+import { Calculations } from "../types";
 
 /**
  * In-memory rate limit store for fallback when Redis is unavailable
@@ -157,7 +159,8 @@ export function enhancedRateLimitMiddleware(options: {
         c.req.header("x-forwarded-for") ||
         c.req.header("x-real-ip") ||
         "unknown";
-      const userId = (c.get("user") as any)?.id || "anonymous";
+      const userId =
+        (c.get("user") as User | undefined)?._id?.toString() || "anonymous";
       return `rate_limit:${ip}:${userId}`;
     },
   } = options;
@@ -195,7 +198,7 @@ export function enhancedRateLimitMiddleware(options: {
           message: `Too many requests, please try again in ${ttl} seconds`,
           retryAfter: ttl,
         },
-        HTTPStatus.RATE_LIMIT_EXCEEDED
+        HTTP_STATUS.TOO_MANY_REQUESTS
       );
     }
 

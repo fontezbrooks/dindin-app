@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import { ObjectId } from "mongodb";
 import { getDB } from "../config/database";
-import type { Recipe, User } from "../types";
+import { HTTP_STATUS } from "../constants/http-status";
+import type { Recipe, RecipeFilter, User } from "../types";
 
 type Variables = {
   user: User;
@@ -24,7 +25,7 @@ recipeRoutes.get("/", async (c) => {
     const skip = Number.parseInt(c.req.query("skip") || "0", 10);
 
     // Build query
-    const query: any = { isActive: true };
+    const query: RecipeFilter = { isActive: true };
 
     if (cuisine) {
       query.cuisine = cuisine;
@@ -70,8 +71,8 @@ recipeRoutes.get("/", async (c) => {
         hasMore: skip + limit < total,
       },
     });
-  } catch (error) {
-    return c.json({ error: "Failed to fetch recipes" }, 500);
+  } catch (_error) {
+    return c.json({ error: "Failed to fetch recipes" }, HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 });
 
@@ -87,12 +88,12 @@ recipeRoutes.get("/:recipeId", async (c) => {
     });
 
     if (!recipe) {
-      return c.json({ error: "Recipe not found" }, 404);
+      return c.json({ error: "Recipe not found" }, HTTP_STATUS.NOT_FOUND);
     }
 
     return c.json(recipe);
-  } catch (error) {
-    return c.json({ error: "Failed to fetch recipe" }, 500);
+  } catch (_error) {
+    return c.json({ error: "Failed to fetch recipe" }, HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 });
 
@@ -102,10 +103,10 @@ recipeRoutes.get("/swipe/batch", async (c) => {
     const db = getDB();
     const user = c.get("user") as User;
     const limit = Number.parseInt(c.req.query("limit") || "10", 10);
-    const cursor = c.req.query("cursor");
+    const _cursor = c.req.query("cursor");
 
     // Build match criteria based on user preferences
-    const matchCriteria: any = { isActive: true };
+    const matchCriteria: RecipeFilter = { isActive: true };
 
     if (user.profile.dietaryPreferences.length > 0) {
       matchCriteria.dietary_tags = { $in: user.profile.dietaryPreferences };
@@ -145,8 +146,8 @@ recipeRoutes.get("/swipe/batch", async (c) => {
       hasMore: true, // For random recipes, we can always get more
       nextCursor: Date.now().toString(), // Use timestamp as cursor for random batches
     });
-  } catch (error) {
-    return c.json({ error: "Failed to fetch recipes for swiping" }, 500);
+  } catch (_error) {
+    return c.json({ error: "Failed to fetch recipes for swiping" }, HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 });
 
@@ -196,8 +197,8 @@ recipeRoutes.get("/recommendations", async (c) => {
       .toArray();
 
     return c.json(recommendations);
-  } catch (error) {
-    return c.json({ error: "Failed to fetch recommendations" }, 500);
+  } catch (_error) {
+    return c.json({ error: "Failed to fetch recommendations" }, HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 });
 
@@ -212,8 +213,8 @@ recipeRoutes.post("/:recipeId/like", async (c) => {
       .updateOne({ _id: new ObjectId(recipeId) }, { $inc: { likes: 1 } });
 
     return c.json({ message: "Recipe liked" });
-  } catch (error) {
-    return c.json({ error: "Failed to like recipe" }, 500);
+  } catch (_error) {
+    return c.json({ error: "Failed to like recipe" }, HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 });
 
@@ -231,12 +232,12 @@ recipeRoutes.get("/:recipeId/nutrition", async (c) => {
       );
 
     if (!recipe) {
-      return c.json({ error: "Recipe not found" }, 404);
+      return c.json({ error: "Recipe not found" }, HTTP_STATUS.NOT_FOUND);
     }
 
     return c.json(recipe.nutrition);
-  } catch (error) {
-    return c.json({ error: "Failed to fetch nutrition info" }, 500);
+  } catch (_error) {
+    return c.json({ error: "Failed to fetch nutrition info" }, HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 });
 

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { ObjectId } from "mongodb";
 import { getDB } from "../config/database";
+import { HTTP_STATUS } from "../constants/http-status";
 import type { User } from "../types";
 
 const userRoutes = new Hono();
@@ -8,13 +9,13 @@ const userRoutes = new Hono();
 // Get current user profile
 userRoutes.get("/me", async (c) => {
   const user = c.get("user") as User;
-  return c.json(user);
+  return await c.json(user);
 });
 
 // Get user preferences (for recipe filtering)
 userRoutes.get("/preferences", async (c) => {
   const user = c.get("user") as User;
-  return c.json({
+  return await c.json({
     dietaryRestrictions: user.profile.dietaryPreferences || [],
     cuisinePreferences: user.profile.cuisinePreferences || [],
     allergies: user.profile.allergies || [],
@@ -31,7 +32,7 @@ userRoutes.patch("/me", async (c) => {
     const usersCollection = db.collection<User>("users");
 
     // Only allow updating certain fields
-    const allowedUpdates = {
+    const allowedUpdates: Record<string, unknown> = {
       username: updates.username,
       "profile.dietaryPreferences": updates.dietaryPreferences,
       "profile.cuisinePreferences": updates.cuisinePreferences,
@@ -51,8 +52,11 @@ userRoutes.patch("/me", async (c) => {
 
     const updatedUser = await usersCollection.findOne({ _id: user._id });
     return c.json(updatedUser);
-  } catch (error) {
-    return c.json({ error: "Failed to update profile" }, 500);
+  } catch (_error) {
+    return c.json(
+      { error: "Failed to update profile" },
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
+    );
   }
 });
 
@@ -71,8 +75,11 @@ userRoutes.get("/me/saved-recipes", async (c) => {
       .toArray();
 
     return c.json(recipes);
-  } catch (error) {
-    return c.json({ error: "Failed to fetch saved recipes" }, 500);
+  } catch (_error) {
+    return c.json(
+      { error: "Failed to fetch saved recipes" },
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
+    );
   }
 });
 
@@ -90,7 +97,7 @@ userRoutes.post("/me/saved-recipes/:recipeId", async (c) => {
     });
 
     if (!recipe) {
-      return c.json({ error: "Recipe not found" }, 404);
+      return c.json({ error: "Recipe not found" }, HTTP_STATUS.NOT_FOUND);
     }
 
     // Add to saved recipes if not already saved
@@ -103,8 +110,11 @@ userRoutes.post("/me/saved-recipes/:recipeId", async (c) => {
     );
 
     return c.json({ message: "Recipe saved successfully" });
-  } catch (error) {
-    return c.json({ error: "Failed to save recipe" }, 500);
+  } catch (_error) {
+    return c.json(
+      { error: "Failed to save recipe" },
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
+    );
   }
 });
 
@@ -124,8 +134,11 @@ userRoutes.delete("/me/saved-recipes/:recipeId", async (c) => {
     );
 
     return c.json({ message: "Recipe removed from saved" });
-  } catch (error) {
-    return c.json({ error: "Failed to remove recipe" }, 500);
+  } catch (_error) {
+    return c.json(
+      { error: "Failed to remove recipe" },
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
+    );
   }
 });
 
@@ -149,7 +162,7 @@ userRoutes.post("/me/shopping-lists", async (c) => {
     });
 
     if (!recipe) {
-      return c.json({ error: "Recipe not found" }, 404);
+      return c.json({ error: "Recipe not found" }, HTTP_STATUS.NOT_FOUND);
     }
 
     // Create shopping list
@@ -157,7 +170,7 @@ userRoutes.post("/me/shopping-lists", async (c) => {
       _id: new ObjectId(),
       recipeId: new ObjectId(recipeId),
       recipeName: recipe.title,
-      ingredients: recipe.ingredients.map((ing: any) => ({
+      ingredients: recipe.ingredients.map((ing: Record<string, unknown>) => ({
         ...ing,
         checked: false,
       })),
@@ -173,8 +186,11 @@ userRoutes.post("/me/shopping-lists", async (c) => {
     );
 
     return c.json(shoppingList);
-  } catch (error) {
-    return c.json({ error: "Failed to create shopping list" }, 500);
+  } catch (_error) {
+    return c.json(
+      { error: "Failed to create shopping list" },
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
+    );
   }
 });
 
@@ -183,7 +199,7 @@ userRoutes.patch("/me/shopping-lists/:listId/items/:itemIndex", async (c) => {
   try {
     const user = c.get("user") as User;
     const listId = c.req.param("listId");
-    const itemIndex = Number.parseInt(c.req.param("itemIndex"));
+    const itemIndex = Number.parseInt(c.req.param("itemIndex"), 10);
     const { checked } = await c.req.json();
     const db = getDB();
 
@@ -201,8 +217,11 @@ userRoutes.patch("/me/shopping-lists/:listId/items/:itemIndex", async (c) => {
     );
 
     return c.json({ message: "Shopping list updated" });
-  } catch (error) {
-    return c.json({ error: "Failed to update shopping list" }, 500);
+  } catch (_error) {
+    return c.json(
+      { error: "Failed to update shopping list" },
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
+    );
   }
 });
 
@@ -234,8 +253,11 @@ userRoutes.post("/me/dining-history", async (c) => {
     );
 
     return c.json(historyEntry);
-  } catch (error) {
-    return c.json({ error: "Failed to add to dining history" }, 500);
+  } catch (_error) {
+    return c.json(
+      { error: "Failed to add to dining history" },
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
+    );
   }
 });
 

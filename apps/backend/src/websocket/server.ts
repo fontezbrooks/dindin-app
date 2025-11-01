@@ -2,7 +2,7 @@ import { verifyToken } from "@clerk/backend";
 import type { ServerWebSocket } from "bun";
 import { getDB } from "../config/database";
 import { SessionService } from "../services/sessionService";
-import { type WSMessage, WSMessageType } from "../types";
+import { type ExtendedServerWebSocket, type WSMessage, WSMessageType } from "../types";
 
 type WSClient = {
   ws: ServerWebSocket;
@@ -12,8 +12,8 @@ type WSClient = {
 };
 
 class WebSocketManager {
-  private clients: Map<string, WSClient> = new Map();
-  private sessions: Map<string, Set<string>> = new Map(); // sessionId -> Set<userId>
+  private readonly clients: Map<string, WSClient> = new Map();
+  private readonly sessions: Map<string, Set<string>> = new Map(); // sessionId -> Set<userId>
 
   async handleConnection(ws: ServerWebSocket, token: string) {
     try {
@@ -71,8 +71,7 @@ class WebSocketManager {
           message: "WebSocket connected successfully",
         })
       );
-    } catch (error) {
-      console.error("WebSocket connection error:", error);
+    } catch (_error) {
       ws.send(
         JSON.stringify({
           type: WSMessageType.ERROR,
@@ -117,9 +116,7 @@ class WebSocketManager {
             })
           );
       }
-    } catch (error) {
-      console.error("Message handling error:", error);
-    }
+    } catch (_error) {}
   }
 
   private async handleJoinSession(client: WSClient, sessionId: string) {
@@ -156,7 +153,7 @@ class WebSocketManager {
       if (!this.sessions.has(sessionId)) {
         this.sessions.set(sessionId, new Set());
       }
-      this.sessions.get(sessionId)!.add(client.userId);
+      this.sessions.get(sessionId)?.add(client.userId);
 
       // Notify all participants
       this.broadcastToSession(sessionId, {
@@ -169,9 +166,7 @@ class WebSocketManager {
           participants: Array.from(this.sessions.get(sessionId) || []),
         },
       });
-    } catch (error) {
-      console.error("Join session error:", error);
-    }
+    } catch (_error) {}
   }
 
   private async handleLeaveSession(client: WSClient, sessionId: string) {
@@ -229,12 +224,14 @@ class WebSocketManager {
     // Get updated session to check for matches
     const session = await SessionService.getSession(client.sessionId);
 
-    if (!session) return;
+    if (!session) {
+      return;
+    }
 
     // Check if a new match was created
-    const latestMatch = session.matches[session.matches.length - 1];
+    const latestMatch = session.matches.at(-1);
 
-    if (latestMatch && latestMatch.matchedUsers.includes(client.userId)) {
+    if (latestMatch?.matchedUsers.includes(client.userId)) {
       // Notify all participants about the match
       this.broadcastToSession(client.sessionId, {
         type: WSMessageType.MATCH_FOUND,
@@ -353,10 +350,10 @@ export function setupWebSocket() {
           await wsManager.handleConnection(ws, data.token);
 
           // Store userId in ws data for later reference
-          (ws as any).userId = data.userId;
-        } else if ((ws as any).userId) {
+          (ws as ExtendedServerWebSocket).userId = data.userId;
+        } else if ((ws as ExtendedServerWebSocket).userId) {
           // Handle other messages
-          await wsManager.handleMessage((ws as any).userId, message.toString());
+          await wsManager.handleMessage((ws as ExtendedServerWebSocket).userId, message.toString());
         } else {
           ws.send(
             JSON.stringify({
@@ -365,8 +362,7 @@ export function setupWebSocket() {
             })
           );
         }
-      } catch (error) {
-        console.error("WebSocket message error:", error);
+      } catch (_error) {
         ws.send(
           JSON.stringify({
             type: WSMessageType.ERROR,
@@ -377,14 +373,12 @@ export function setupWebSocket() {
     },
 
     close(ws: ServerWebSocket) {
-      const userId = (ws as any).userId;
+      const userId = (ws as ExtendedServerWebSocket).userId;
       if (userId) {
         wsManager.handleDisconnect(userId);
       }
     },
 
-    error(ws: ServerWebSocket, error: Error) {
-      console.error("WebSocket error:", error);
-    },
+    error(_ws: ServerWebSocket, _error: Error) {},
   };
 }

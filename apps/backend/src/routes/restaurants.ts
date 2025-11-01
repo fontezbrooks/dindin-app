@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import { ObjectId } from "mongodb";
 import { getDB } from "../config/database";
-import type { Restaurant, User } from "../types";
+import { HTTP_STATUS } from "../constants/http-status";
+import type { Restaurant, RestaurantFilter, User } from "../types";
 
 const restaurantRoutes = new Hono();
 
@@ -20,7 +21,7 @@ restaurantRoutes.get("/", async (c) => {
     const skip = Number.parseInt(c.req.query("skip") || "0", 10);
 
     // Build query
-    const query: any = { isActive: true };
+    const query: RestaurantFilter = { isActive: true };
 
     if (cuisine) {
       query.cuisine = cuisine;
@@ -63,8 +64,8 @@ restaurantRoutes.get("/", async (c) => {
         hasMore: skip + limit < total,
       },
     });
-  } catch (error) {
-    return c.json({ error: "Failed to fetch restaurants" }, 500);
+  } catch (_error) {
+    return c.json({ error: "Failed to fetch restaurants" }, HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 });
 
@@ -80,12 +81,12 @@ restaurantRoutes.get("/:restaurantId", async (c) => {
     });
 
     if (!restaurant) {
-      return c.json({ error: "Restaurant not found" }, 404);
+      return c.json({ error: "Restaurant not found" }, HTTP_STATUS.NOT_FOUND);
     }
 
     return c.json(restaurant);
-  } catch (error) {
-    return c.json({ error: "Failed to fetch restaurant" }, 500);
+  } catch (_error) {
+    return c.json({ error: "Failed to fetch restaurant" }, HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 });
 
@@ -97,7 +98,7 @@ restaurantRoutes.get("/swipe/batch", async (c) => {
     const count = Number.parseInt(c.req.query("count") || "10", 10);
 
     // Build match criteria based on user preferences
-    const matchCriteria: any = { isActive: true };
+    const matchCriteria: RestaurantFilter = { isActive: true };
 
     if (user.profile.cuisinePreferences.length > 0) {
       matchCriteria.cuisine = { $in: user.profile.cuisinePreferences };
@@ -128,8 +129,8 @@ restaurantRoutes.get("/swipe/batch", async (c) => {
     }
 
     return c.json(restaurants);
-  } catch (error) {
-    return c.json({ error: "Failed to fetch restaurants for swiping" }, 500);
+  } catch (_error) {
+    return c.json({ error: "Failed to fetch restaurants for swiping" }, HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 });
 
@@ -192,8 +193,8 @@ restaurantRoutes.get("/recommendations", async (c) => {
       .toArray();
 
     return c.json(recommendations);
-  } catch (error) {
-    return c.json({ error: "Failed to fetch recommendations" }, 500);
+  } catch (_error) {
+    return c.json({ error: "Failed to fetch recommendations" }, HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 });
 
@@ -326,8 +327,8 @@ restaurantRoutes.post("/seed", async (c) => {
     await db.collection<Restaurant>("restaurants").insertMany(fakeRestaurants);
 
     return c.json({ message: `Seeded ${fakeRestaurants.length} restaurants` });
-  } catch (error) {
-    return c.json({ error: "Failed to seed restaurants" }, 500);
+  } catch (_error) {
+    return c.json({ error: "Failed to seed restaurants" }, HTTP_STATUS.INTERNAL_SERVER_ERROR);
   }
 });
 

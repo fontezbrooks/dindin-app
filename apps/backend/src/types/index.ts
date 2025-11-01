@@ -1,4 +1,5 @@
 import type { ObjectId } from "mongodb";
+import type { ServerWebSocket } from "bun";
 
 // User types
 export type User = {
@@ -188,7 +189,7 @@ export type WSMessage = {
   type: WSMessageType;
   sessionId: string;
   userId: string;
-  data: any;
+  data: Record<string, unknown>;
 };
 
 export const WSMessageType = {
@@ -255,3 +256,36 @@ export type ErrorTrackingTransaction = {
   startTime: number;
   finish: () => void;
 };
+
+// MongoDB filter types
+export type RestaurantFilter = {
+  isActive?: boolean;
+  cuisine?: string | { $in: string[] };
+  priceRange?: number;
+  rating?: { $gte: number };
+  $text?: { $search: string };
+  _id?: ObjectId | { $nin: ObjectId[] };
+  $or?: Array<{
+    cuisine?: { $in: string[] };
+    priceRange?: { $in: number[] };
+  }>;
+};
+
+export type RecipeFilter = {
+  isActive?: boolean;
+  cuisine?: string | { $in: string[] };
+  dietary_tags?: { $in: string[] };
+  difficulty?: string;
+  $text?: { $search: string };
+  _id?: ObjectId | { $nin: ObjectId[] };
+  tags?: { $in: string[] };
+  $or?: Array<{
+    cuisine?: { $in: string[] };
+    tags?: { $in: string[] };
+  }>;
+};
+
+// Extended WebSocket types for ServerWebSocket
+export interface ExtendedServerWebSocket extends ServerWebSocket {
+  userId?: string;
+}

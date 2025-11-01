@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { getDB } from "../config/database";
+import { HTTP_STATUS, DATA_SIZE } from "../constants/http-status";
 import { getCacheService } from "../services/cache";
 
 const health = new Hono();
@@ -19,7 +20,7 @@ health.get("/", async (c) =>
  * Detailed health check with all service statuses
  */
 health.get("/detailed", async (c) => {
-  const healthStatus: Record<string, any> = {
+  const healthStatus: Record<string, unknown> = {
     status: "healthy",
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
@@ -70,12 +71,11 @@ health.get("/detailed", async (c) => {
 
   // Memory usage
   const memoryUsage = process.memoryUsage();
-  const healthStatusOffset = 1024;
   healthStatus.memory = {
-    rss: `${Math.round(memoryUsage.rss / healthStatusOffset)}MB`,
-    heapTotal: `${Math.round(memoryUsage.heapTotal / healthStatusOffset)}MB`,
-    heapUsed: `${Math.round(memoryUsage.heapUsed / healthStatusOffset)}MB`,
-    external: `${Math.round(memoryUsage.external / healthStatusOffset)}MB`,
+    rss: `${Math.round(memoryUsage.rss / DATA_SIZE.MEGABYTE)}MB`,
+    heapTotal: `${Math.round(memoryUsage.heapTotal / DATA_SIZE.MEGABYTE)}MB`,
+    heapUsed: `${Math.round(memoryUsage.heapUsed / DATA_SIZE.MEGABYTE)}MB`,
+    external: `${Math.round(memoryUsage.external / DATA_SIZE.MEGABYTE)}MB`,
   };
 
   // Environment info
@@ -85,7 +85,7 @@ health.get("/detailed", async (c) => {
     env: process.env.NODE_ENV || "development",
   };
 
-  return c.json(healthStatus, healthStatus.status === "healthy" ? 200 : 503);
+  return c.json(healthStatus, healthStatus.status === "healthy" ? HTTP_STATUS.OK : HTTP_STATUS.SERVICE_UNAVAILABLE);
 });
 
 /**
@@ -110,7 +110,7 @@ health.get("/redis", async (c) => {
           hitRate: `${stats.hitRate.toFixed(2)}%`,
         },
       },
-      isHealthy ? 200 : 503
+      isHealthy ? HTTP_STATUS.OK : HTTP_STATUS.SERVICE_UNAVAILABLE
     );
   } catch (error) {
     return c.json(
@@ -118,7 +118,7 @@ health.get("/redis", async (c) => {
         status: "unhealthy",
         error: error instanceof Error ? error.message : "Unknown error",
       },
-      503
+      HTTP_STATUS.SERVICE_UNAVAILABLE
     );
   }
 });
@@ -142,8 +142,8 @@ health.get("/mongodb", async (c) => {
       stats: {
         collections: stats.collections,
         documents: stats.objects,
-        dataSize: `${Math.round(stats.dataSize / 1024 / 1024)}MB`,
-        indexSize: `${Math.round(stats.indexSize / 1024 / 1024)}MB`,
+        dataSize: `${Math.round(stats.dataSize / DATA_SIZE.MEGABYTE)}MB`,
+        indexSize: `${Math.round(stats.indexSize / DATA_SIZE.MEGABYTE)}MB`,
       },
     });
   } catch (error) {
@@ -152,7 +152,7 @@ health.get("/mongodb", async (c) => {
         status: "unhealthy",
         error: error instanceof Error ? error.message : "Unknown error",
       },
-      503
+      HTTP_STATUS.SERVICE_UNAVAILABLE
     );
   }
 });
@@ -180,7 +180,7 @@ health.get("/ready", async (c) => {
         ready: false,
         reason: error instanceof Error ? error.message : "Services not ready",
       },
-      503
+      HTTP_STATUS.SERVICE_UNAVAILABLE
     );
   }
 });

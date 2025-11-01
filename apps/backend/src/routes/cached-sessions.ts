@@ -1,6 +1,14 @@
 import { Hono } from "hono";
 import { sessionCacheMiddleware } from "../middleware/cache";
-import { CachedSessionService } from "../services/cachedSessionService";
+import {
+  addMessage,
+  createSession,
+  getSession,
+  getUserSessions,
+  joinSession,
+  leaveSession,
+  recordSwipe,
+} from "../services/cachedSessionService";
 import type { User } from "../types";
 import { HTTPStatus } from "../types";
 
@@ -18,7 +26,7 @@ cachedSessionRoutes.use("/user/:userId", sessionCacheMiddleware());
 cachedSessionRoutes.post("/", async (c) => {
   try {
     const user = c.get("user") as User;
-    const session = await CachedSessionService.createSession(user);
+    const session = await createSession(user);
     return c.json(session, HTTPStatus.CREATED);
   } catch (error: unknown) {
     return c.json({ error: (error as Error).message }, HTTPStatus.BAD_REQUEST);
@@ -38,7 +46,7 @@ cachedSessionRoutes.post("/join", async (c) => {
       );
     }
 
-    const session = await CachedSessionService.joinSession(sessionCode, user);
+    const session = await joinSession(sessionCode, user);
     return c.json(session);
   } catch (error: unknown) {
     return c.json(
@@ -52,7 +60,7 @@ cachedSessionRoutes.post("/join", async (c) => {
 cachedSessionRoutes.get("/:sessionId", async (c) => {
   try {
     const sessionId = c.req.param("sessionId");
-    const session = await CachedSessionService.getSession(sessionId);
+    const session = await getSession(sessionId);
 
     if (!session) {
       return c.json({ error: "Session not found" }, HTTPStatus.NOT_FOUND);
@@ -86,7 +94,7 @@ cachedSessionRoutes.post("/:sessionId/leave", async (c) => {
     const sessionId = c.req.param("sessionId");
     const user = c.get("user") as User;
 
-    await CachedSessionService.leaveSession(sessionId, user.clerkUserId);
+    await leaveSession(sessionId, user.clerkUserId);
     return c.json({ message: "Successfully left session" });
   } catch (error: unknown) {
     return c.json(
@@ -121,7 +129,7 @@ cachedSessionRoutes.post("/:sessionId/swipe", async (c) => {
       );
     }
 
-    await CachedSessionService.recordSwipe({
+    await recordSwipe({
       sessionId,
       userId: user.clerkUserId,
       itemType,
@@ -130,8 +138,10 @@ cachedSessionRoutes.post("/:sessionId/swipe", async (c) => {
     });
 
     return c.json({ message: "Swipe recorded successfully" });
-  } catch (error: any) {
-    return c.json({ error: error.message }, HTTPStatus.INTERNAL_SERVER_ERROR);
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    return c.json({ error: errorMessage }, HTTPStatus.INTERNAL_SERVER_ERROR);
   }
 });
 
@@ -146,7 +156,7 @@ cachedSessionRoutes.post("/:sessionId/messages", async (c) => {
       return c.json({ error: "Message is required" }, HTTPStatus.BAD_REQUEST);
     }
 
-    await CachedSessionService.addMessage(
+    await addMessage(
       sessionId,
       user.clerkUserId,
       user.username || user.email,
@@ -173,7 +183,7 @@ cachedSessionRoutes.get("/user/:userId", async (c) => {
       return c.json({ error: "Not authorized" }, HTTPStatus.FORBIDDEN);
     }
 
-    const sessions = await CachedSessionService.getUserSessions(userId);
+    const sessions = await getUserSessions(userId);
     return c.json(sessions);
   } catch (error: unknown) {
     return c.json(

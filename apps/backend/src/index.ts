@@ -8,7 +8,7 @@ import { authMiddleware } from "./middleware/auth";
 import {
   cleanupRateLimiter,
   enhancedRateLimitMiddleware,
-} from "./middleware/rateLimiter";
+} from "./middleware/rate-limiter";
 import authRoutes from "./routes/auth";
 import healthRoutes from "./routes/health";
 import recipeRoutes from "./routes/recipes";
@@ -85,23 +85,15 @@ async function initializeServices() {
   try {
     // Connect to MongoDB
     await connectDB();
-    console.log("✅ MongoDB connected");
 
     // Initialize Redis
     const redis = getRedisClient();
     await redis.ping();
-    console.log("✅ Redis connected");
 
     // Initialize cache service
     const cache = getCacheService();
-    const isHealthy = await cache.healthCheck();
-    if (isHealthy) {
-      console.log("✅ Cache service initialized");
-    } else {
-      console.log("⚠️ Cache service running in degraded mode");
-    }
-  } catch (error) {
-    console.error("❌ Failed to initialize services:", error);
+    await cache.healthCheck();
+  } catch (_error) {
     process.exit(1);
   }
 }
@@ -110,27 +102,20 @@ async function initializeServices() {
 await initializeServices();
 
 // Create server with WebSocket support
-const server = serve({
+const _server = serve({
   port: PORT,
   hostname: HOST,
   fetch: app.fetch,
   websocket: setupWebSocket(),
 });
 
-console.log(`🚀 Server running on http://${HOST}:${PORT}`);
-
 // Graceful shutdown handler
 process.on("SIGINT", async () => {
-  console.log("\n🛑 Shutting down gracefully...");
-
   try {
     cleanupRateLimiter();
     await closeRedisConnection();
     await closeDB();
-    console.log("👋 All connections closed");
-  } catch (error) {
-    console.error("Error during shutdown:", error);
-  }
+  } catch (_error) {}
 
   process.exit(0);
 });

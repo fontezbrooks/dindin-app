@@ -1,5 +1,6 @@
 import { ObjectId } from "mongodb";
 import { getDB } from "../config/database";
+import { CACHE_KEYS, TTL_CONFIG } from "../config/redis";
 import {
   type DinnerSession,
   type SessionParticipant,
@@ -8,7 +9,6 @@ import {
   type User,
 } from "../types";
 import { CacheHelpers, getCacheService } from "./cache";
-import { CACHE_KEYS, TTL_CONFIG } from "../config/redis";
 
 /**
  * Enhanced Session Service with Redis caching
@@ -19,7 +19,7 @@ export class CachedSessionService {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
   }
 
-  static async createSession(hostUser: User): Promise<DinnerSession> {
+  async createSession(hostUser: User): Promise<DinnerSession> {
     const db = getDB();
     const sessionsCollection = db.collection<DinnerSession>("sessions");
     const cache = getCacheService();
@@ -64,9 +64,13 @@ export class CachedSessionService {
     }
 
     const sessionExpiryMinutes = Number.parseInt(
-      process.env.SESSION_EXPIRY_MINUTES || "60"
+      process.env.SESSION_EXPIRY_MINUTES || "60",
+      10
     );
-    const expiresAt = new Date(Date.now() + sessionExpiryMinutes * 60 * 1000);
+    const millisecondsInSecond = 1000;
+    const expiresAt = new Date(
+      Date.now() + sessionExpiryMinutes * 60 * millisecondsInSecond
+    );
 
     const newSession: DinnerSession = {
       sessionCode: CachedSessionService.generateSessionCode(),
@@ -252,7 +256,7 @@ export class CachedSessionService {
       _id: new ObjectId(sessionId),
     });
 
-    if (session && session.participants.every((p) => !p.isActive)) {
+    if (session?.participants.every((p) => !p.isActive)) {
       await sessionsCollection.updateOne(
         { _id: new ObjectId(sessionId) },
         {
@@ -326,9 +330,7 @@ export class CachedSessionService {
     const cache = getCacheService();
 
     // Try to get session from cache first
-    let session = await cache.get<DinnerSession>(
-      CACHE_KEYS.session(sessionId)
-    );
+    let session = await cache.get<DinnerSession>(CACHE_KEYS.session(sessionId));
 
     if (!session) {
       session = await sessionsCollection.findOne({
@@ -380,7 +382,9 @@ export class CachedSessionService {
         // Invalidate session cache
         await CacheHelpers.session.invalidate(sessionId);
 
-        console.log(`Match found for ${itemType} ${itemId} in session ${sessionId}`);
+        console.log(
+          `Match found for ${itemType} ${itemId} in session ${sessionId}`
+        );
       }
     }
   }
@@ -501,9 +505,7 @@ export class CachedSessionService {
     }
 
     // Sort by creation date (newest first)
-    sessions.sort(
-      (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
-    );
+    sessions.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
     return sessions;
   }

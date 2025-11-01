@@ -16,8 +16,8 @@ restaurantRoutes.get("/", async (c) => {
     const priceRange = c.req.query("price");
     const minRating = c.req.query("minRating");
     const search = c.req.query("search");
-    const limit = Number.parseInt(c.req.query("limit") || "20");
-    const skip = Number.parseInt(c.req.query("skip") || "0");
+    const limit = Number.parseInt(c.req.query("limit") || "20", 10);
+    const skip = Number.parseInt(c.req.query("skip") || "0", 10);
 
     // Build query
     const query: any = { isActive: true };
@@ -27,7 +27,7 @@ restaurantRoutes.get("/", async (c) => {
     }
 
     if (priceRange) {
-      query.priceRange = Number.parseInt(priceRange);
+      query.priceRange = Number.parseInt(priceRange, 10);
     }
 
     if (minRating) {
@@ -94,7 +94,7 @@ restaurantRoutes.get("/swipe/batch", async (c) => {
   try {
     const db = getDB();
     const user = c.get("user") as User;
-    const count = Number.parseInt(c.req.query("count") || "10");
+    const count = Number.parseInt(c.req.query("count") || "10", 10);
 
     // Build match criteria based on user preferences
     const matchCriteria: any = { isActive: true };

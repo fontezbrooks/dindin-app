@@ -4,12 +4,12 @@ import { getDB } from "../config/database";
 import { SessionService } from "../services/sessionService";
 import { type WSMessage, WSMessageType } from "../types";
 
-interface WSClient {
+type WSClient = {
   ws: ServerWebSocket;
   userId: string;
   sessionId?: string;
   username?: string;
-}
+};
 
 class WebSocketManager {
   private clients: Map<string, WSClient> = new Map();
@@ -304,7 +304,9 @@ class WebSocketManager {
   ) {
     const sessionUserIds = this.sessions.get(sessionId);
 
-    if (!sessionUserIds) return;
+    if (!sessionUserIds) {
+      return;
+    }
 
     const messageStr = JSON.stringify(message);
 

@@ -20,7 +20,10 @@ class InMemoryRateLimiter {
     }, 60000);
   }
 
-  async increment(key: string, window: number): Promise<{ count: number; ttl: number }> {
+  increment(
+    key: string,
+    window: number
+  ): Promise<{ count: number; ttl: number }> {
     const now = Date.now();
     const resetAt = now + window * 1000;
 
@@ -34,7 +37,10 @@ class InMemoryRateLimiter {
 
     // Increment existing counter
     existing.count++;
-    return { count: existing.count, ttl: Math.ceil((existing.resetAt - now) / 1000) };
+    return {
+      count: existing.count,
+      ttl: Math.ceil((existing.resetAt - now) / 1000),
+    };
   }
 
   destroy() {
@@ -73,7 +79,10 @@ export function enhancedRateLimitMiddleware(options: {
     window,
     keyGenerator = (c) => {
       // Default key generator uses IP + user ID if available
-      const ip = c.req.header("x-forwarded-for") || c.req.header("x-real-ip") || "unknown";
+      const ip =
+        c.req.header("x-forwarded-for") ||
+        c.req.header("x-real-ip") ||
+        "unknown";
       const userId = (c.get("user") as any)?.id || "anonymous";
       return `rate_limit:${ip}:${userId}`;
     },
@@ -107,7 +116,10 @@ export function enhancedRateLimitMiddleware(options: {
         }
       } catch (error) {
         // Redis failed, fall back to in-memory
-        console.warn("Redis rate limiting failed, using in-memory fallback:", error);
+        console.warn(
+          "Redis rate limiting failed, using in-memory fallback:",
+          error
+        );
         const limiter = getInMemoryLimiter();
         const result = await limiter.increment(key, window);
         count = result.count;

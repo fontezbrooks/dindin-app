@@ -10,6 +10,11 @@ apps/.DS_Store
 .DS_Store*
 apps/.DS_Store*
 *.DS_Store
+apps/.DS_Store
+packages/**/.DS_Store
+packages/.DS_Store
+
+
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 

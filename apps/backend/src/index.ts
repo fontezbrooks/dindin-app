@@ -36,13 +36,18 @@ app.use(
   cors({
     origin: (origin) => {
       // Allow requests with no origin (mobile apps, Postman, etc.)
-      if (!origin) return "";
+      if (!origin) {
+        return "";
+      }
       // Check if origin is in allowed list
       if (allowedOrigins.includes(origin)) {
         return origin;
       }
       // For development, also allow any localhost origin
-      if (process.env.NODE_ENV === "development" && origin.includes("localhost")) {
+      if (
+        process.env.NODE_ENV === "development" &&
+        origin.includes("localhost")
+      ) {
         return origin;
       }
       // Reject other origins
@@ -57,7 +62,7 @@ app.basePath(basePath);
 app.use(
   "*",
   enhancedRateLimitMiddleware({
-    limit: Number.parseInt(process.env.API_RATE_LIMIT || "100"),
+    limit: Number.parseInt(process.env.API_RATE_LIMIT || "100", 10),
     window: 60, // 1 minute window
   })
 );

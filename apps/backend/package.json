@@ -2,6 +2,12 @@
   "name": "backend",
   "scripts": {
     "dev": "bun run --hot src/index.ts",
+    "build": "bun build src/index.ts --target=bun --outdir=dist --minify",
+    "start": "NODE_ENV=production bun run dist/index.js",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "test:coverage": "bun test --coverage",
+    "check-types": "tsc --noEmit",
     "seed": "bun run src/scripts/seed-recipes.ts",
     "format": "biome format --write --reporter=rdjson",
     "lint": "biome lint --write --reporter=rdjson",
@@ -23,6 +29,7 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "typescript": "^5.9.2"
   }
 }

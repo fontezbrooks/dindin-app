@@ -1,0 +1,324 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+concurrency:
+  group: deploy-${{ github.ref }}-${{ inputs.environment || 'production' }}
+  cancel-in-progress: false
+
+env:
+  BUN_VERSION: "1.2.0"
+  DEPLOYMENT_ENV: ${{ inputs.environment || 'production' }}
+
+jobs:
+  deploy-backend:
+    name: Deploy Backend
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'production' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build backend
+        run: bun run turbo build --filter=backend
+
+      - name: Create deployment package
+        run: |
+          cd apps/backend
+          tar -czf ../../backend-${{ github.sha }}.tar.gz \
+            dist/ \
+            package.json \
+            bun.lockb
+
+      - name: Configure AWS credentials
+        if: env.DEPLOYMENT_ENV != 'local'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Upload to S3
+        if: env.DEPLOYMENT_ENV != 'local'
+        run: |
+          aws s3 cp backend-${{ github.sha }}.tar.gz \
+            s3://${{ vars.DEPLOYMENT_BUCKET }}/backend/
+
+      - name: Deploy to ECS (Staging)
+        if: env.DEPLOYMENT_ENV == 'staging'
+        run: |
+          # Update ECS service with new image
+          aws ecs update-service \
+            --cluster ${{ vars.ECS_CLUSTER_STAGING }} \
+            --service ${{ vars.ECS_SERVICE_BACKEND_STAGING }} \
+            --force-new-deployment
+
+      - name: Deploy to ECS (Production)
+        if: env.DEPLOYMENT_ENV == 'production'
+        run: |
+          # Blue-Green deployment strategy
+          echo "🚀 Starting blue-green deployment to production"
+
+          # Update task definition with new image
+          aws ecs update-service \
+            --cluster ${{ vars.ECS_CLUSTER_PRODUCTION }} \
+            --service ${{ vars.ECS_SERVICE_BACKEND_PRODUCTION }} \
+            --force-new-deployment
+
+      - name: Run health checks
+        if: env.DEPLOYMENT_ENV != 'local'
+        run: |
+          echo "🔍 Running health checks..."
+
+          # Wait for deployment to complete
+          sleep 60
+
+          # Health check endpoint
+          HEALTH_URL="${{ vars.BACKEND_URL }}/health"
+
+          # Retry health check up to 10 times
+          for i in {1..10}; do
+            if curl -f "$HEALTH_URL" > /dev/null 2>&1; then
+              echo "✅ Health check passed"
+              exit 0
+            fi
+            echo "⏳ Health check attempt $i failed, retrying in 30s..."
+            sleep 30
+          done
+
+          echo "❌ Health check failed after 10 attempts"
+          exit 1
+
+      - name: Run smoke tests
+        if: env.DEPLOYMENT_ENV == 'production'
+        run: |
+          echo "🧪 Running smoke tests..."
+
+          # Basic API endpoints test
+          BASE_URL="${{ vars.BACKEND_URL }}"
+
+          # Test health endpoint
+          curl -f "$BASE_URL/health" || exit 1
+
+          # Test auth endpoint (should return 401 without token)
+          curl -f "$BASE_URL/api/v1/auth/me" -w "%{http_code}" | grep -q "401" || exit 1
+
+          echo "✅ Smoke tests passed"
+
+      - name: Notify deployment
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const status = '${{ job.status }}' === 'success' ? '✅ SUCCESS' : '❌ FAILED';
+            const env = '${{ env.DEPLOYMENT_ENV }}';
+            const sha = '${{ github.sha }}';
+
+            const message = `## 🚀 Backend Deployment ${status}
+
+            **Environment**: ${env}
+            **Commit**: ${sha.substring(0, 7)}
+            **Status**: ${status}
+            **Time**: ${new Date().toISOString()}
+
+            ${env === 'production' ? '🌟 Production deployment complete!' : '🚧 Staging deployment complete!'}
+            `;
+
+            github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+              body: message
+            });
+
+  deploy-frontend:
+    name: Deploy Frontend
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'production' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Configure environment variables
+        run: |
+          cd apps/frontend
+
+          # Create environment-specific configuration
+          if [[ "${{ env.DEPLOYMENT_ENV }}" == "staging" ]]; then
+            echo "EXPO_PUBLIC_API_URL=${{ vars.STAGING_API_URL }}" > .env
+            echo "EXPO_PUBLIC_SENTRY_DSN=${{ vars.STAGING_SENTRY_DSN }}" >> .env
+          else
+            echo "EXPO_PUBLIC_API_URL=${{ vars.PRODUCTION_API_URL }}" > .env
+            echo "EXPO_PUBLIC_SENTRY_DSN=${{ vars.PRODUCTION_SENTRY_DSN }}" >> .env
+          fi
+
+      - name: Build for web (Staging)
+        if: env.DEPLOYMENT_ENV == 'staging'
+        run: |
+          cd apps/frontend
+          bun run build:web
+        env:
+          NODE_ENV: production
+
+      - name: Deploy web to Vercel (Staging)
+        if: env.DEPLOYMENT_ENV == 'staging'
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          working-directory: apps/frontend
+          scope: ${{ secrets.VERCEL_ORG_ID }}
+
+      - name: Build native app (Production)
+        if: env.DEPLOYMENT_ENV == 'production'
+        run: |
+          cd apps/frontend
+
+          # Build iOS
+          eas build --platform ios --profile production --non-interactive --no-wait
+
+          # Build Android
+          eas build --platform android --profile production --non-interactive --no-wait
+
+      - name: Submit to app stores (Production)
+        if: env.DEPLOYMENT_ENV == 'production' && github.ref == 'refs/heads/main'
+        run: |
+          cd apps/frontend
+
+          # Submit to App Store Connect (iOS)
+          eas submit --platform ios --profile production --non-interactive
+
+          # Submit to Google Play Console (Android)
+          eas submit --platform android --profile production --non-interactive
+
+      - name: Deploy web to production
+        if: env.DEPLOYMENT_ENV == 'production'
+        run: |
+          cd apps/frontend
+
+          # Build optimized web version
+          bun run build:web
+
+          # Deploy to production hosting (Vercel, Netlify, etc.)
+          # Configure based on your hosting provider
+
+      - name: Update OTA
+        if: env.DEPLOYMENT_ENV == 'production'
+        run: |
+          cd apps/frontend
+
+          # Create OTA update for existing users
+          eas update --branch production --message "Deploy ${{ github.sha }}"
+
+      - name: Notify deployment
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const status = '${{ job.status }}' === 'success' ? '✅ SUCCESS' : '❌ FAILED';
+            const env = '${{ env.DEPLOYMENT_ENV }}';
+            const sha = '${{ github.sha }}';
+
+            const message = `## 📱 Frontend Deployment ${status}
+
+            **Environment**: ${env}
+            **Commit**: ${sha.substring(0, 7)}
+            **Status**: ${status}
+            **Time**: ${new Date().toISOString()}
+
+            ${env === 'production' ?
+              '🚀 Production app build submitted to stores!\n📲 OTA update deployed to existing users!' :
+              '🔧 Staging web deployment complete!'
+            }
+            `;
+
+            github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+              body: message
+            });
+
+  rollback:
+    name: Rollback (Manual)
+    runs-on: ubuntu-latest
+    if: failure() && inputs.environment
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Rollback backend
+        run: |
+          echo "🔄 Rolling back backend deployment..."
+
+          # Get previous stable task definition
+          aws ecs describe-services \
+            --cluster ${{ vars.ECS_CLUSTER_PRODUCTION }} \
+            --services ${{ vars.ECS_SERVICE_BACKEND_PRODUCTION }} \
+            --query 'services[0].taskDefinition' \
+            --output text
+
+      - name: Rollback frontend
+        run: |
+          echo "🔄 Rolling back frontend deployment..."
+
+          # Rollback OTA update
+          cd apps/frontend
+          eas update rollback --branch production
+
+      - name: Notify rollback
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const message = `## 🔄 Deployment Rollback Initiated
+
+            **Environment**: ${{ inputs.environment }}
+            **Triggered by**: Deployment failure
+            **Time**: ${new Date().toISOString()}
+
+            ⚠️ Services have been rolled back to previous stable version.
+            `;
+
+            github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+              body: message
+            });

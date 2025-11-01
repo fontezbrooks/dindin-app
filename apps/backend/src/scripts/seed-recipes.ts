@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { MongoClient } from "mongodb";
+import { logger } from "../../../../packages/logger";
 
 async function seedRecipes() {
   const uri = process.env.MONGODB_URI || "mongodb://localhost:27017/dindin";
@@ -10,7 +11,7 @@ async function seedRecipes() {
 
   try {
     await client.connect();
-    console.log("Connected to MongoDB");
+    logger.info("Connected to MongoDB for seeding");
 
     const db = client.db(dbName);
     const collection = db.collection("recipes");
@@ -18,7 +19,7 @@ async function seedRecipes() {
     // Check if recipes already exist
     const count = await collection.countDocuments();
     if (count > 0) {
-      console.log(`Database already has ${count} recipes. Skipping seed.`);
+      logger.info(`Database already has ${count} recipes. Skipping seed.`);
       return;
     }
 
@@ -44,22 +45,31 @@ async function seedRecipes() {
 
     // Insert recipes
     const result = await collection.insertMany(recipesToInsert);
-    console.log(`Successfully inserted ${result.insertedCount} recipes`);
+    logger.info(`Successfully inserted ${result.insertedCount} recipes`);
 
     // Create indexes
     await collection.createIndex({ title: "text", description: "text" });
     await collection.createIndex({ cuisine: 1 });
     await collection.createIndex({ dietary_tags: 1 });
     await collection.createIndex({ isActive: 1 });
-    console.log("Indexes created");
+    logger.info("Database indexes created");
   } catch (error) {
-    console.error("Error seeding recipes:", error);
+    logger.error(
+      "Error seeding recipes",
+      error instanceof Error ? error : undefined
+    );
     process.exit(1);
   } finally {
     await client.close();
-    console.log("Connection closed");
+    logger.info("Database connection closed");
   }
 }
 
 // Run the seed function
-seedRecipes().catch(console.error);
+seedRecipes().catch((error) => {
+  logger.error(
+    "Seed function failed",
+    error instanceof Error ? error : undefined
+  );
+  process.exit(1);
+});

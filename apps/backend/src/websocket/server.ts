@@ -1,8 +1,13 @@
 import { verifyToken } from "@clerk/backend";
 import type { ServerWebSocket } from "bun";
+import { logger } from "../../../../packages/logger";
 import { getDB } from "../config/database";
 import { SessionService } from "../services/sessionService";
-import { type ExtendedServerWebSocket, type WSMessage, WSMessageType } from "../types";
+import {
+  type ExtendedServerWebSocket,
+  type WSMessage,
+  WSMessageType,
+} from "../types";
 
 type WSClient = {
   ws: ServerWebSocket;
@@ -17,9 +22,12 @@ class WebSocketManager {
 
   async handleConnection(ws: ServerWebSocket, token: string) {
     try {
+      logger.debug("WebSocket connection attempt");
+
       // Verify token
       const secretKey = process.env.CLERK_SECRET_KEY;
       if (!secretKey) {
+        logger.error("CLERK_SECRET_KEY not configured for WebSocket");
         ws.send(
           JSON.stringify({
             type: WSMessageType.ERROR,
@@ -32,6 +40,7 @@ class WebSocketManager {
 
       const payload = await verifyToken(token, { secretKey });
       if (!payload) {
+        logger.warn("WebSocket authentication failed: Invalid token");
         ws.send(
           JSON.stringify({ type: WSMessageType.ERROR, error: "Invalid token" })
         );
@@ -40,6 +49,7 @@ class WebSocketManager {
       }
 
       const userId = payload.sub;
+      logger.debug("WebSocket token verified", undefined, { userId });
 
       // Get user from database
       const db = getDB();
@@ -48,6 +58,7 @@ class WebSocketManager {
         .findOne({ clerkUserId: userId });
 
       if (!user) {
+        logger.warn("WebSocket user not found", undefined, { userId });
         ws.send(
           JSON.stringify({ type: WSMessageType.ERROR, error: "User not found" })
         );
@@ -64,6 +75,12 @@ class WebSocketManager {
 
       this.clients.set(userId, client);
 
+      logger.websocketConnection("connect", undefined, {
+        userId,
+        username: client.username,
+        totalConnections: this.clients.size,
+      });
+
       ws.send(
         JSON.stringify({
           type: "connected",
@@ -71,7 +88,11 @@ class WebSocketManager {
           message: "WebSocket connected successfully",
         })
       );
-    } catch (_error) {
+    } catch (error) {
+      logger.error(
+        "WebSocket authentication failed",
+        error instanceof Error ? error : undefined
+      );
       ws.send(
         JSON.stringify({
           type: WSMessageType.ERROR,
@@ -109,6 +130,10 @@ class WebSocketManager {
           break;
 
         default:
+          logger.warn("Unknown WebSocket message type", undefined, {
+            userId,
+            messageType: data.type,
+          });
           client.ws.send(
             JSON.stringify({
               type: WSMessageType.ERROR,
@@ -116,7 +141,14 @@ class WebSocketManager {
             })
           );
       }
-    } catch (_error) {}
+    } catch (error) {
+      logger.error(
+        "Error handling WebSocket message",
+        error instanceof Error ? error : undefined,
+        undefined,
+        { userId }
+      );
+    }
   }
 
   private async handleJoinSession(client: WSClient, sessionId: string) {
@@ -155,6 +187,13 @@ class WebSocketManager {
       }
       this.sessions.get(sessionId)?.add(client.userId);
 
+      logger.businessEvent("session_joined", undefined, {
+        sessionId,
+        userId: client.userId,
+        username: client.username,
+        participantCount: this.sessions.get(sessionId)?.size || 0,
+      });
+
       // Notify all participants
       this.broadcastToSession(sessionId, {
         type: WSMessageType.SESSION_UPDATE,
@@ -166,7 +205,14 @@ class WebSocketManager {
           participants: Array.from(this.sessions.get(sessionId) || []),
         },
       });
-    } catch (_error) {}
+    } catch (error) {
+      logger.error(
+        "Error handling session join",
+        error instanceof Error ? error : undefined,
+        undefined,
+        { sessionId, userId: client.userId }
+      );
+    }
   }
 
   private async handleLeaveSession(client: WSClient, sessionId: string) {
@@ -232,6 +278,14 @@ class WebSocketManager {
     const latestMatch = session.matches.at(-1);
 
     if (latestMatch?.matchedUsers.includes(client.userId)) {
+      logger.businessEvent("match_found", undefined, {
+        sessionId: client.sessionId,
+        itemType,
+        itemId,
+        matchedUsers: latestMatch.matchedUsers,
+        participantCount: latestMatch.matchedUsers.length,
+      });
+
       // Notify all participants about the match
       this.broadcastToSession(client.sessionId, {
         type: WSMessageType.MATCH_FOUND,
@@ -321,6 +375,13 @@ class WebSocketManager {
     const client = this.clients.get(userId);
 
     if (client) {
+      logger.websocketConnection("disconnect", undefined, {
+        userId,
+        username: client.username,
+        sessionId: client.sessionId,
+        totalConnections: this.clients.size - 1,
+      });
+
       // Leave any active session
       if (client.sessionId) {
         this.handleLeaveSession(client, client.sessionId);
@@ -353,7 +414,10 @@ export function setupWebSocket() {
           (ws as ExtendedServerWebSocket).userId = data.userId;
         } else if ((ws as ExtendedServerWebSocket).userId) {
           // Handle other messages
-          await wsManager.handleMessage((ws as ExtendedServerWebSocket).userId, message.toString());
+          await wsManager.handleMessage(
+            (ws as ExtendedServerWebSocket).userId,
+            message.toString()
+          );
         } else {
           ws.send(
             JSON.stringify({
@@ -362,7 +426,11 @@ export function setupWebSocket() {
             })
           );
         }
-      } catch (_error) {
+      } catch (error) {
+        logger.error(
+          "Invalid WebSocket message format",
+          error instanceof Error ? error : undefined
+        );
         ws.send(
           JSON.stringify({
             type: WSMessageType.ERROR,
@@ -379,6 +447,8 @@ export function setupWebSocket() {
       }
     },
 
-    error(_ws: ServerWebSocket, _error: Error) {},
+    error(_ws: ServerWebSocket, error: Error) {
+      logger.error("WebSocket error", error);
+    },
   };
 }

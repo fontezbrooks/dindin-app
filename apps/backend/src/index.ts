@@ -1,7 +1,11 @@
 import { serve } from "bun";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { logger } from "hono/logger";
+import { logger } from "../../../packages/logger";
+import {
+  enhancedLoggingMiddleware,
+  loggingMiddleware,
+} from "../../../packages/logger/middleware";
 import { closeDB, connectDB } from "./config/database";
 import { closeRedisConnection, getRedisClient } from "./config/redis";
 import { authMiddleware } from "./middleware/auth";
@@ -23,8 +27,8 @@ const PORT = process.env.PORT;
 const HOST = process.env.HOST || "";
 const basePath = process.env.EXPO_PUBLIC_API_URL || "";
 
-// Global middleware
-app.use("*", logger());
+// Global middleware - structured logging
+app.use("*", loggingMiddleware());
 
 // CORS configuration with specific origins
 const allowedOrigins = process.env.ALLOWED_ORIGINS
@@ -73,8 +77,9 @@ app.route("/health", healthRoutes);
 // Public routes
 app.route("/api/auth", authRoutes);
 
-// Protected routes
+// Protected routes with enhanced logging
 app.use("/api/*", authMiddleware);
+app.use("/api/*", enhancedLoggingMiddleware());
 app.route("/api/users", userRoutes);
 app.route("/api/recipes", recipeRoutes);
 app.route("/api/restaurants", restaurantRoutes);
@@ -83,17 +88,28 @@ app.route("/api/sessions", sessionRoutes);
 // Initialize services
 async function initializeServices() {
   try {
+    logger.info("Initializing services...");
+
     // Connect to MongoDB
     await connectDB();
+    logger.info("MongoDB connected successfully");
 
     // Initialize Redis
     const redis = getRedisClient();
     await redis.ping();
+    logger.info("Redis connected successfully");
 
     // Initialize cache service
     const cache = getCacheService();
     await cache.healthCheck();
-  } catch (_error) {
+    logger.info("Cache service initialized successfully");
+
+    logger.info("All services initialized successfully");
+  } catch (error) {
+    logger.error(
+      "Failed to initialize services",
+      error instanceof Error ? error : undefined
+    );
     process.exit(1);
   }
 }
@@ -109,13 +125,22 @@ const _server = serve({
   websocket: setupWebSocket(),
 });
 
+logger.info(`Server starting on ${HOST}:${PORT}`);
+
 // Graceful shutdown handler
 process.on("SIGINT", async () => {
+  logger.info("Received SIGINT, shutting down gracefully...");
   try {
     cleanupRateLimiter();
     await closeRedisConnection();
     await closeDB();
-  } catch (_error) {}
+    logger.info("Shutdown completed successfully");
+  } catch (error) {
+    logger.error(
+      "Error during shutdown",
+      error instanceof Error ? error : undefined
+    );
+  }
 
   process.exit(0);
 });

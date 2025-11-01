@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { getDB } from "../config/database";
-import { HTTP_STATUS, DATA_SIZE } from "../constants/http-status";
+import { DATA_SIZE, HTTP_STATUS } from "../constants/http-status";
 import { getCacheService } from "../services/cache";
 
 const health = new Hono();
@@ -85,7 +85,12 @@ health.get("/detailed", async (c) => {
     env: process.env.NODE_ENV || "development",
   };
 
-  return c.json(healthStatus, healthStatus.status === "healthy" ? HTTP_STATUS.OK : HTTP_STATUS.SERVICE_UNAVAILABLE);
+  return c.json(
+    healthStatus,
+    healthStatus.status === "healthy"
+      ? HTTP_STATUS.OK
+      : HTTP_STATUS.SERVICE_UNAVAILABLE
+  );
 });
 
 /**

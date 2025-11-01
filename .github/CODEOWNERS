@@ -1,0 +1,45 @@
+# Code Owners for dindin-app
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Global owners - require review for any changes
+* @fontezbrooks
+
+# Root configuration files
+package.json @fontezbrooks
+turbo.json @fontezbrooks
+biome.jsonc @fontezbrooks
+tsconfig*.json @fontezbrooks
+.gitignore @fontezbrooks
+
+# Backend application
+apps/backend/ @fontezbrooks
+apps/backend/src/routes/ @fontezbrooks
+apps/backend/src/services/ @fontezbrooks
+
+# Frontend application
+apps/frontend/ @fontezbrooks
+apps/frontend/src/ @fontezbrooks
+
+# Shared packages
+packages/ @fontezbrooks
+
+# Infrastructure and DevOps
+.github/ @fontezbrooks
+.github/workflows/ @fontezbrooks
+scripts/ @fontezbrooks
+
+# Security-sensitive files (require additional review)
+.github/workflows/security.yml @fontezbrooks
+.github/workflows/deploy.yml @fontezbrooks
+apps/backend/src/middleware/auth.ts @fontezbrooks
+apps/backend/src/middleware/security.ts @fontezbrooks
+
+# Documentation
+*.md @fontezbrooks
+docs/ @fontezbrooks
+claudedocs/ @fontezbrooks
+
+# Configuration files that affect the entire project
+.env* @fontezbrooks
+docker* @fontezbrooks
+Dockerfile* @fontezbrooks

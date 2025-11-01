@@ -1,0 +1,358 @@
+name: Security & Dependencies
+
+on:
+  schedule:
+    # Run daily at 6 AM UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+  push:
+    paths:
+      - 'bun.lock'
+      - '**/package.json'
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BUN_VERSION: "1.2.0"
+
+jobs:
+  audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run dependency audit
+        run: |
+          echo "## 🔍 Dependency Audit Report" > audit-report.md
+          echo "" >> audit-report.md
+
+          # Run bun audit and capture output
+          if bun audit --json > audit.json 2>&1; then
+            echo "✅ No vulnerabilities found" >> audit-report.md
+          else
+            echo "⚠️ Vulnerabilities detected:" >> audit-report.md
+            echo "" >> audit-report.md
+            echo '```json' >> audit-report.md
+            cat audit.json >> audit-report.md
+            echo '```' >> audit-report.md
+          fi
+
+      - name: Check for outdated dependencies
+        run: |
+          echo "" >> audit-report.md
+          echo "## 📦 Outdated Dependencies" >> audit-report.md
+          echo "" >> audit-report.md
+
+          # Check for outdated packages
+          bun outdated 2>/dev/null || echo "Unable to check outdated packages" >> audit-report.md
+
+      - name: Run OWASP ZAP Baseline Scan
+        if: github.ref == 'refs/heads/main'
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: 'https://your-staging-url.com'
+          rules_file_name: '.zap/rules.tsv'
+          cmd_options: '-a'
+
+      - name: Upload audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-audit-${{ github.run_number }}
+          path: |
+            audit-report.md
+            audit.json
+          retention-days: 30
+
+      - name: Create issue for vulnerabilities
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let auditReport = '';
+
+            try {
+              auditReport = fs.readFileSync('audit-report.md', 'utf8');
+            } catch (error) {
+              auditReport = '❌ Failed to generate audit report';
+            }
+
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚨 Security Vulnerabilities Detected - ${new Date().toISOString().split('T')[0]}`,
+              body: `# 🚨 Security Alert
+
+            Automated security scan has detected vulnerabilities in dependencies.
+
+            **Scan Date**: ${new Date().toISOString()}
+            **Workflow**: [${context.workflow}](${context.payload.repository.html_url}/actions/runs/${context.runId})
+
+            ## Audit Report
+
+            ${auditReport}
+
+            ## Action Required
+
+            - [ ] Review the vulnerabilities above
+            - [ ] Update affected packages
+            - [ ] Run tests to ensure compatibility
+            - [ ] Deploy security fixes
+
+            ---
+            *This issue was automatically created by the security workflow*`,
+              labels: ['security', 'dependencies', 'priority-high']
+            });
+
+            console.log(`Created issue #${issue.data.number}`);
+
+  license-check:
+    name: License Compliance
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install license checker
+        run: bun add --dev license-checker
+
+      - name: Check licenses
+        run: |
+          echo "## 📄 License Report" > license-report.md
+          echo "" >> license-report.md
+
+          # Generate license report
+          bunx license-checker --json --out licenses.json
+
+          # Parse and format licenses
+          cat licenses.json | jq -r '
+            to_entries[] |
+            "**\(.key)**: \(.value.licenses // "Unknown") - \(.value.repository // "N/A")"
+          ' >> license-report.md
+
+          # Check for problematic licenses
+          PROBLEMATIC_LICENSES="GPL|AGPL|LGPL|SSPL"
+
+          if cat licenses.json | jq -r '.[] | .licenses' | grep -iE "$PROBLEMATIC_LICENSES"; then
+            echo "" >> license-report.md
+            echo "⚠️ **WARNING**: Potentially problematic licenses detected!" >> license-report.md
+            exit 1
+          fi
+
+      - name: Upload license report
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-report-${{ github.run_number }}
+          path: |
+            license-report.md
+            licenses.json
+          retention-days: 90
+
+  dependency-update:
+    name: Update Dependencies
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Configure Git
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+      - name: Update dependencies
+        run: |
+          # Update all dependencies
+          bun update
+
+          # Check if there are any changes
+          if git diff --quiet; then
+            echo "No dependency updates available"
+            exit 0
+          fi
+
+          # Create branch for updates
+          BRANCH_NAME="deps/auto-update-$(date +%Y%m%d)"
+          git checkout -b "$BRANCH_NAME"
+
+          # Commit changes
+          git add .
+          git commit -m "chore: update dependencies
+
+          - Automated dependency update
+          - Run date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+
+          🤖 This is an automated update. Please review changes carefully."
+
+          # Push branch
+          git push origin "$BRANCH_NAME"
+
+          # Create pull request
+          gh pr create \
+            --title "🔄 Automated Dependency Update - $(date +%Y-%m-%d)" \
+            --body "## 🤖 Automated Dependency Update
+
+          This PR contains automated dependency updates.
+
+          ### 📋 Checklist
+          - [ ] Review dependency changes
+          - [ ] Run tests locally
+          - [ ] Check for breaking changes
+          - [ ] Verify security fixes
+
+          ### 🔍 Changes
+          \`\`\`bash
+          $(git log --oneline -1)
+          \`\`\`
+
+          **⚠️ Important**: Review all changes before merging!" \
+            --base main \
+            --head "$BRANCH_NAME" \
+            --label "dependencies" \
+            --label "automated"
+
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  container-scan:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    strategy:
+      matrix:
+        app: [backend, frontend]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          cd apps/${{ matrix.app }}
+
+          if [ -f Dockerfile ]; then
+            docker build -t ${{ matrix.app }}:${{ github.sha }} .
+          else
+            echo "No Dockerfile found for ${{ matrix.app }}"
+            exit 0
+          fi
+
+      - name: Run Trivy vulnerability scanner
+        if: hashFiles(format('apps/{0}/Dockerfile', matrix.app)) != ''
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ matrix.app }}:${{ github.sha }}'
+          format: 'sarif'
+          output: 'trivy-${{ matrix.app }}.sarif'
+
+      - name: Upload Trivy scan results
+        if: hashFiles(format('apps/{0}/Dockerfile', matrix.app)) != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-${{ matrix.app }}.sarif'
+          category: 'trivy-${{ matrix.app }}'
+
+  code-quality:
+    name: Code Quality Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      - name: Run CodeQL Analysis
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript, typescript
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+  notify:
+    name: Security Notification
+    runs-on: ubuntu-latest
+    needs: [audit, license-check, container-scan, code-quality]
+    if: always() && (needs.audit.result == 'failure' || needs.license-check.result == 'failure')
+
+    steps:
+      - name: Send Slack notification
+        if: env.SLACK_WEBHOOK_URL
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          channel: '#security-alerts'
+          text: |
+            🚨 Security scan detected issues in ${{ github.repository }}
+
+            **Audit Status**: ${{ needs.audit.result }}
+            **License Check**: ${{ needs.license-check.result }}
+            **Container Scan**: ${{ needs.container-scan.result }}
+
+            Please review the security workflow results.
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Send email notification
+        if: env.SECURITY_EMAIL
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: '🚨 Security Alert: ${{ github.repository }}'
+          to: ${{ secrets.SECURITY_EMAIL }}
+          from: 'GitHub Actions <actions@example.com>'
+          body: |
+            Security scan has detected issues in ${{ github.repository }}.
+
+            Please check the GitHub Actions workflow for details:
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

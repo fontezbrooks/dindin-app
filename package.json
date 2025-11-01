@@ -2,8 +2,11 @@
   "name": "dindin-app",
   "module": "index.ts",
   "devDependencies": {
+    "@babel/preset-react": "^7.28.5",
+    "@babel/preset-typescript": "^7.28.5",
     "@biomejs/biome": "2.3.0",
     "@types/bun": "latest",
+    "babel-preset-expo": "^54.0.6",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.6",
     "turbo": "^2.5.8",

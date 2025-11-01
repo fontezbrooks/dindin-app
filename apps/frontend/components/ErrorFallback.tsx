@@ -23,7 +23,9 @@ export const ErrorFallback: React.FC<ErrorFallbackProps> = ({
     !process.env.NODE_ENV || process.env.NODE_ENV === "production";
 
   const handleCopyError = async () => {
-    if (!error) return;
+    if (!error) {
+      return;
+    }
 
     const errorDetails = {
       message: error.message,

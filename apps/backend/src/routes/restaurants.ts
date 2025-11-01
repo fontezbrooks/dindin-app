@@ -65,7 +65,10 @@ restaurantRoutes.get("/", async (c) => {
       },
     });
   } catch (_error) {
-    return c.json({ error: "Failed to fetch restaurants" }, HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return c.json(
+      { error: "Failed to fetch restaurants" },
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
+    );
   }
 });
 
@@ -86,7 +89,10 @@ restaurantRoutes.get("/:restaurantId", async (c) => {
 
     return c.json(restaurant);
   } catch (_error) {
-    return c.json({ error: "Failed to fetch restaurant" }, HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return c.json(
+      { error: "Failed to fetch restaurant" },
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
+    );
   }
 });
 
@@ -130,7 +136,10 @@ restaurantRoutes.get("/swipe/batch", async (c) => {
 
     return c.json(restaurants);
   } catch (_error) {
-    return c.json({ error: "Failed to fetch restaurants for swiping" }, HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return c.json(
+      { error: "Failed to fetch restaurants for swiping" },
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
+    );
   }
 });
 
@@ -194,7 +203,10 @@ restaurantRoutes.get("/recommendations", async (c) => {
 
     return c.json(recommendations);
   } catch (_error) {
-    return c.json({ error: "Failed to fetch recommendations" }, HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return c.json(
+      { error: "Failed to fetch recommendations" },
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
+    );
   }
 });
 
@@ -328,7 +340,10 @@ restaurantRoutes.post("/seed", async (c) => {
 
     return c.json({ message: `Seeded ${fakeRestaurants.length} restaurants` });
   } catch (_error) {
-    return c.json({ error: "Failed to seed restaurants" }, HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return c.json(
+      { error: "Failed to seed restaurants" },
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
+    );
   }
 });
 

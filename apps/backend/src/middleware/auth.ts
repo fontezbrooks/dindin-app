@@ -1,20 +1,18 @@
 import { verifyToken } from "@clerk/backend";
 import type { Context, Next } from "hono";
-import { logger } from "hono/logger";
-import { ConsoleTransport, LogLayer } from "loglayer";
+import { logger } from "../../../../packages/logger";
+import { getRequestContext } from "../../../../packages/logger/middleware";
 import { getDB } from "../config/database";
 import { HTTPStatus, SubscriptionPlan, type User } from "../types";
 
 export async function authMiddleware(c: Context, next: Next) {
-  const log = new LogLayer({
-    transport: new ConsoleTransport({
-      logger: console,
-    }),
-  });
+  const requestContext = getRequestContext(c);
+
   try {
     const authHeader = c.req.header("Authorization");
 
     if (!authHeader?.startsWith("Bearer ")) {
+      logger.authAttempt(false, requestContext, "No Bearer token provided");
       return c.json(
         { error: "Unauthorized - No token provided" },
         HTTPStatus.UNAUTHORIZED
@@ -25,7 +23,11 @@ export async function authMiddleware(c: Context, next: Next) {
     const secretKey = process.env.CLERK_SECRET_KEY;
 
     if (!secretKey) {
-      log.error("CLERK_SECRET_KEY not configured");
+      logger.error(
+        "CLERK_SECRET_KEY not configured",
+        undefined,
+        requestContext
+      );
       return c.json(
         { error: "Server configuration error" },
         HTTPStatus.INTERNAL_SERVER_ERROR
@@ -38,6 +40,7 @@ export async function authMiddleware(c: Context, next: Next) {
     });
 
     if (!payload) {
+      logger.authAttempt(false, requestContext, "Invalid token");
       return c.json({ error: "Invalid token" }, HTTPStatus.UNAUTHORIZED);
     }
 
@@ -76,9 +79,20 @@ export async function authMiddleware(c: Context, next: Next) {
 
     c.set("user", user);
 
+    // Update request context with user ID
+    if (requestContext) {
+      requestContext.userId = payload.sub;
+      c.set("requestContext", requestContext);
+    }
+
+    logger.authAttempt(true, requestContext);
     await next();
   } catch (error) {
-    logger(() => `Auth middleware error: ${error}`);
+    logger.error(
+      "Auth middleware error",
+      error instanceof Error ? error : undefined,
+      requestContext
+    );
     return c.json({ error: "Authentication failed" }, HTTPStatus.UNAUTHORIZED);
   }
 }

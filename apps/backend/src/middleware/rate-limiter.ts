@@ -1,5 +1,6 @@
 import type { Context, Next } from "hono";
-import { ConsoleTransport, LogLayer } from "loglayer";
+import { logger } from "../../../../packages/logger";
+import { getRequestContext } from "../../../../packages/logger/middleware";
 import { HTTP_STATUS } from "../constants/http-status";
 import { getCacheService } from "../services/cache";
 import type { User } from "../types";
@@ -8,12 +9,6 @@ import { Calculations } from "../types";
 /**
  * In-memory rate limit store for fallback when Redis is unavailable
  */
-
-const log = new LogLayer({
-  transport: new ConsoleTransport({
-    logger: console,
-  }),
-});
 class InMemoryRateLimiter {
   private readonly store = new Map<
     string,
@@ -107,7 +102,9 @@ async function tryRedisRateLimit(
 
     return { count, ttl };
   } catch (error) {
-    log.warn(`Redis rate limiting failed, using in-memory fallback: ${error}`);
+    logger.warn(
+      `Redis rate limiting failed, using in-memory fallback: ${error}`
+    );
     return null;
   }
 }
@@ -192,6 +189,9 @@ export function enhancedRateLimitMiddleware(options: {
 
     // Check if rate limit exceeded
     if (count > limit) {
+      const requestContext = getRequestContext(c);
+      logger.rateLimitHit(requestContext, limit);
+
       return c.json(
         {
           error: "Rate limit exceeded",

@@ -1,0 +1,17 @@
+{
+  "name": "@dindin/logger",
+  "version": "1.0.0",
+  "description": "Structured logging package for DinDin backend",
+  "main": "index.ts",
+  "types": "index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./middleware": "./middleware.ts"
+  },
+  "dependencies": {
+    "winston": "^3.18.3"
+  },
+  "peerDependencies": {
+    "hono": "^4.10.3"
+  }
+}

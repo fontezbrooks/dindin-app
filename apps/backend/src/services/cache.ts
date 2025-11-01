@@ -1,17 +1,11 @@
 import type { Redis } from "ioredis";
-import { ConsoleTransport, LogLayer } from "loglayer";
+import { logger } from "../../../../packages/logger";
 import {
   CACHE_KEYS,
   closeRedisConnection,
   getRedisClient,
   TTL_CONFIG,
 } from "../config/redis";
-
-const log = new LogLayer({
-  transport: new ConsoleTransport({
-    logger: console,
-  }),
-});
 
 export type CacheStats = {
   hits: number;
@@ -55,12 +49,12 @@ export class CacheService {
    */
   private validateKey(key: string): boolean {
     if (!key || key.length > CACHE_CONSTANTS.MAX_KEY_LENGTH) {
-      log.error(`Invalid cache key length: ${key?.length || 0}`);
+      logger.error(`Invalid cache key length: ${key?.length || 0}`);
       return false;
     }
 
     if (!CACHE_CONSTANTS.KEY_VALIDATION_REGEX.test(key)) {
-      log.error("Invalid cache key format");
+      logger.error("Invalid cache key format");
       return false;
     }
 
@@ -78,7 +72,7 @@ export class CacheService {
       CACHE_CONSTANTS.KILOBYTE *
       CACHE_CONSTANTS.KILOBYTE;
     if (serialized.length > maxValueSize) {
-      log.error(`Cache value too large: ${serialized.length} bytes`);
+      logger.error(`Cache value too large: ${serialized.length} bytes`);
       return false;
     }
     return true;
@@ -91,9 +85,13 @@ export class CacheService {
     try {
       await this.redis.ping();
       this.isAvailable = true;
-    } catch (_error) {
+    } catch (error) {
       this.isAvailable = false;
-      log.warn("Redis is not available, cache operations will be skipped");
+      logger.warn(
+        "Redis is not available, cache operations will be skipped",
+        undefined,
+        { error: String(error) }
+      );
     }
   }
 
@@ -126,7 +124,7 @@ export class CacheService {
       }
     } catch (error) {
       this.stats.errors++;
-      log.error(`Cache get error: ${error}`);
+      logger.error(`Cache get error: ${error}`);
       return null;
     }
   }
@@ -158,7 +156,7 @@ export class CacheService {
       return true;
     } catch (error) {
       this.stats.errors++;
-      log.error(`Cache set error: ${error}`);
+      logger.error(`Cache set error: ${error}`);
       return false;
     }
   }
@@ -180,7 +178,7 @@ export class CacheService {
       return await this.redis.del(...keys);
     } catch (error) {
       this.stats.errors++;
-      log.error(`Cache delete error: ${error}`);
+      logger.error(`Cache delete error: ${error}`);
       return 0;
     }
   }
@@ -198,7 +196,7 @@ export class CacheService {
       return result === 1;
     } catch (error) {
       this.stats.errors++;
-      log.error(`Cache exists error: ${error}`);
+      logger.error(`Cache exists error: ${error}`);
       return false;
     }
   }
@@ -220,7 +218,7 @@ export class CacheService {
       return result === 1;
     } catch (error) {
       this.stats.errors++;
-      log.error(`Cache expire error: ${error}`);
+      logger.error(`Cache expire error: ${error}`);
       return false;
     }
   }
@@ -257,20 +255,20 @@ export class CacheService {
             resolve(deleted);
           } catch (delError) {
             this.stats.errors++;
-            log.error(`Cache delete error for pattern: ${delError}`);
+            logger.error(`Cache delete error for pattern: ${delError}`);
             resolve(0);
           }
         });
 
         stream.on("error", (error) => {
           this.stats.errors++;
-          log.error(`Cache scan error for pattern: ${error}`);
+          logger.error(`Cache scan error for pattern: ${error}`);
           resolve(0);
         });
       });
     } catch (error) {
       this.stats.errors++;
-      log.error(`Cache flush pattern error: ${error}`);
+      logger.error(`Cache flush pattern error: ${error}`);
       return 0;
     }
   }
@@ -298,7 +296,7 @@ export class CacheService {
 
       return value;
     } catch (error) {
-      log.error(`Error in getOrSet fallback: ${error}`);
+      logger.error(`Error in getOrSet fallback: ${error}`);
       throw error;
     }
   }
@@ -372,7 +370,7 @@ export class CacheService {
 
       return retrieved === testValue;
     } catch (error) {
-      log.error(`Redis health check failed: ${error}`);
+      logger.error(`Redis health check failed: ${error}`);
       return false;
     }
   }

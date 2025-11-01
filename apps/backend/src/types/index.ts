@@ -1,5 +1,5 @@
-import type { ObjectId } from "mongodb";
 import type { ServerWebSocket } from "bun";
+import type { ObjectId } from "mongodb";
 
 // User types
 export type User = {

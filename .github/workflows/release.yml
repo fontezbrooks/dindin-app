@@ -1,0 +1,396 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.2.3)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  BUN_VERSION: "1.2.0"
+
+jobs:
+  validate:
+    name: Validate Release
+    runs-on: ubuntu-latest
+
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is-prerelease: ${{ steps.version.outputs.is-prerelease }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION="${{ inputs.version }}"
+            IS_PRERELEASE="${{ inputs.prerelease }}"
+          else
+            VERSION="${{ github.ref_name }}"
+            # Check if version contains pre-release identifiers
+            if [[ "$VERSION" =~ (alpha|beta|rc) ]]; then
+              IS_PRERELEASE="true"
+            else
+              IS_PRERELEASE="false"
+            fi
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "is-prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+
+          # Validate version format
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
+            echo "❌ Invalid version format: $VERSION"
+            echo "Expected format: v1.2.3 or v1.2.3-alpha.1"
+            exit 1
+          fi
+
+          echo "✅ Version: $VERSION (prerelease: $IS_PRERELEASE)"
+
+      - name: Check if tag exists
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          if git tag | grep -q "^$VERSION$"; then
+            echo "❌ Tag $VERSION already exists"
+            exit 1
+          fi
+
+          echo "✅ Tag $VERSION is available"
+
+      - name: Validate changelog
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          if [ ! -f CHANGELOG.md ]; then
+            echo "⚠️ CHANGELOG.md not found, will be created"
+            exit 0
+          fi
+
+          # Check if version is documented in changelog
+          if ! grep -q "$VERSION" CHANGELOG.md; then
+            echo "⚠️ Version $VERSION not found in CHANGELOG.md"
+            echo "Please update the changelog before release"
+          else
+            echo "✅ Version documented in changelog"
+          fi
+
+  build-assets:
+    name: Build Release Assets
+    runs-on: ubuntu-latest
+    needs: validate
+
+    strategy:
+      matrix:
+        app: [backend, frontend]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build ${{ matrix.app }}
+        run: bun run turbo build --filter=${{ matrix.app }}
+        env:
+          NODE_ENV: production
+
+      - name: Create release archive - ${{ matrix.app }}
+        run: |
+          cd apps/${{ matrix.app }}
+
+          # Create release package
+          tar -czf ../../${{ matrix.app }}-${{ needs.validate.outputs.version }}.tar.gz \
+            dist/ \
+            package.json \
+            *.md \
+            *.json
+
+          # Create checksums
+          cd ../..
+          sha256sum ${{ matrix.app }}-${{ needs.validate.outputs.version }}.tar.gz > ${{ matrix.app }}-${{ needs.validate.outputs.version }}.sha256
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.app }}-release
+          path: |
+            ${{ matrix.app }}-${{ needs.validate.outputs.version }}.tar.gz
+            ${{ matrix.app }}-${{ needs.validate.outputs.version }}.sha256
+          retention-days: 30
+
+  build-mobile:
+    name: Build Mobile Release
+    runs-on: ubuntu-latest
+    needs: validate
+    if: needs.validate.outputs.is-prerelease == 'false'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Update app version
+        run: |
+          cd apps/frontend
+          VERSION="${{ needs.validate.outputs.version }}"
+          VERSION_NUMBER="${VERSION#v}"  # Remove 'v' prefix
+
+          # Update app.json version
+          jq ".expo.version = \"$VERSION_NUMBER\"" app.json > app.json.tmp && mv app.json.tmp app.json
+
+          # Update package.json version
+          jq ".version = \"$VERSION_NUMBER\"" package.json > package.json.tmp && mv package.json.tmp package.json
+
+      - name: Build iOS release
+        run: |
+          cd apps/frontend
+          eas build --platform ios --profile production --non-interactive
+
+      - name: Build Android release
+        run: |
+          cd apps/frontend
+          eas build --platform android --profile production --non-interactive
+
+      - name: Download build artifacts
+        run: |
+          cd apps/frontend
+
+          # Get latest build URLs
+          IOS_URL=$(eas build:list --platform ios --limit 1 --json | jq -r '.[0].artifacts.buildUrl')
+          ANDROID_URL=$(eas build:list --platform android --limit 1 --json | jq -r '.[0].artifacts.buildUrl')
+
+          # Download builds
+          curl -L "$IOS_URL" -o ios-${{ needs.validate.outputs.version }}.ipa
+          curl -L "$ANDROID_URL" -o android-${{ needs.validate.outputs.version }}.apk
+
+          # Create checksums
+          sha256sum ios-${{ needs.validate.outputs.version }}.ipa > ios-${{ needs.validate.outputs.version }}.sha256
+          sha256sum android-${{ needs.validate.outputs.version }}.apk > android-${{ needs.validate.outputs.version }}.sha256
+
+      - name: Upload mobile artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-release
+          path: |
+            apps/frontend/ios-${{ needs.validate.outputs.version }}.ipa
+            apps/frontend/android-${{ needs.validate.outputs.version }}.apk
+            apps/frontend/*.sha256
+          retention-days: 90
+
+  generate-changelog:
+    name: Generate Changelog
+    runs-on: ubuntu-latest
+    needs: validate
+
+    outputs:
+      changelog: ${{ steps.changelog.outputs.changelog }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+
+          # Get previous tag
+          PREVIOUS_TAG=$(git tag --sort=-version:refname | grep -E "^v[0-9]+\.[0-9]+\.[0-9]+" | head -2 | tail -1)
+
+          if [ -z "$PREVIOUS_TAG" ]; then
+            PREVIOUS_TAG=$(git rev-list --max-parents=0 HEAD)
+          fi
+
+          echo "Generating changelog from $PREVIOUS_TAG to $VERSION"
+
+          # Generate changelog
+          CHANGELOG=$(cat <<EOF
+          ## What's Changed
+
+          ### 🚀 Features
+          $(git log $PREVIOUS_TAG..HEAD --pretty=format:"- %s" --grep="feat" --grep="feature" | head -10)
+
+          ### 🐛 Bug Fixes
+          $(git log $PREVIOUS_TAG..HEAD --pretty=format:"- %s" --grep="fix" --grep="bug" | head -10)
+
+          ### 🔧 Improvements
+          $(git log $PREVIOUS_TAG..HEAD --pretty=format:"- %s" --grep="improve" --grep="enhance" --grep="refactor" | head -10)
+
+          ### 📚 Documentation
+          $(git log $PREVIOUS_TAG..HEAD --pretty=format:"- %s" --grep="docs" --grep="documentation" | head -5)
+
+          ### 🔒 Security
+          $(git log $PREVIOUS_TAG..HEAD --pretty=format:"- %s" --grep="security" --grep="vulnerability" | head -5)
+
+          **Full Changelog**: https://github.com/${{ github.repository }}/compare/$PREVIOUS_TAG...$VERSION
+          EOF
+          )
+
+          # Clean up empty sections
+          CHANGELOG=$(echo "$CHANGELOG" | sed '/^$/d' | sed '/^### [^[:space:]]*$/d')
+
+          # Save for use in release
+          {
+            echo 'changelog<<EOF'
+            echo "$CHANGELOG"
+            echo EOF
+          } >> $GITHUB_OUTPUT
+
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [validate, build-assets, generate-changelog]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download backend artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-release
+          path: ./release-assets
+
+      - name: Download frontend artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-release
+          path: ./release-assets
+
+      - name: Download mobile artifacts
+        if: needs.validate.outputs.is-prerelease == 'false'
+        uses: actions/download-artifact@v4
+        with:
+          name: mobile-release
+          path: ./release-assets
+
+      - name: Create GitHub tag
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+          VERSION="${{ needs.validate.outputs.version }}"
+          git tag -a "$VERSION" -m "Release $VERSION"
+          git push origin "$VERSION"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.validate.outputs.version }}
+          name: ${{ needs.validate.outputs.version }}
+          body: ${{ needs.generate-changelog.outputs.changelog }}
+          prerelease: ${{ needs.validate.outputs.is-prerelease == 'true' }}
+          files: ./release-assets/*
+          generate_release_notes: false
+
+  deploy-release:
+    name: Deploy Release
+    needs: [validate, create-release]
+    if: needs.validate.outputs.is-prerelease == 'false'
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: production
+    secrets: inherit
+
+  submit-stores:
+    name: Submit to App Stores
+    runs-on: ubuntu-latest
+    needs: [validate, build-mobile, create-release]
+    if: needs.validate.outputs.is-prerelease == 'false'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Submit to App Store
+        run: |
+          cd apps/frontend
+          eas submit --platform ios --profile production --non-interactive
+        continue-on-error: true
+
+      - name: Submit to Google Play
+        run: |
+          cd apps/frontend
+          eas submit --platform android --profile production --non-interactive
+        continue-on-error: true
+
+  notify:
+    name: Release Notification
+    runs-on: ubuntu-latest
+    needs: [validate, create-release, deploy-release, submit-stores]
+    if: always()
+
+    steps:
+      - name: Send Slack notification
+        if: env.SLACK_WEBHOOK_URL
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          channel: '#releases'
+          text: |
+            🎉 New release published: ${{ needs.validate.outputs.version }}
+
+            **Type**: ${{ needs.validate.outputs.is-prerelease == 'true' && 'Pre-release' || 'Stable Release' }}
+            **Status**: ${{ needs.create-release.result == 'success' && '✅ Success' || '❌ Failed' }}
+            **Deploy**: ${{ needs.deploy-release.result == 'success' && '✅ Deployed' || '❌ Failed' }}
+
+            View release: https://github.com/${{ github.repository }}/releases/tag/${{ needs.validate.outputs.version }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Update documentation
+        if: needs.validate.outputs.is-prerelease == 'false'
+        run: |
+          echo "📚 Documentation should be updated for version ${{ needs.validate.outputs.version }}"
+          # Add your documentation update logic here

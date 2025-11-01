@@ -72,7 +72,10 @@ recipeRoutes.get("/", async (c) => {
       },
     });
   } catch (_error) {
-    return c.json({ error: "Failed to fetch recipes" }, HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return c.json(
+      { error: "Failed to fetch recipes" },
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
+    );
   }
 });
 
@@ -93,7 +96,10 @@ recipeRoutes.get("/:recipeId", async (c) => {
 
     return c.json(recipe);
   } catch (_error) {
-    return c.json({ error: "Failed to fetch recipe" }, HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return c.json(
+      { error: "Failed to fetch recipe" },
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
+    );
   }
 });
 
@@ -147,7 +153,10 @@ recipeRoutes.get("/swipe/batch", async (c) => {
       nextCursor: Date.now().toString(), // Use timestamp as cursor for random batches
     });
   } catch (_error) {
-    return c.json({ error: "Failed to fetch recipes for swiping" }, HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return c.json(
+      { error: "Failed to fetch recipes for swiping" },
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
+    );
   }
 });
 
@@ -198,7 +207,10 @@ recipeRoutes.get("/recommendations", async (c) => {
 
     return c.json(recommendations);
   } catch (_error) {
-    return c.json({ error: "Failed to fetch recommendations" }, HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return c.json(
+      { error: "Failed to fetch recommendations" },
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
+    );
   }
 });
 
@@ -214,7 +226,10 @@ recipeRoutes.post("/:recipeId/like", async (c) => {
 
     return c.json({ message: "Recipe liked" });
   } catch (_error) {
-    return c.json({ error: "Failed to like recipe" }, HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return c.json(
+      { error: "Failed to like recipe" },
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
+    );
   }
 });
 
@@ -237,7 +252,10 @@ recipeRoutes.get("/:recipeId/nutrition", async (c) => {
 
     return c.json(recipe.nutrition);
   } catch (_error) {
-    return c.json({ error: "Failed to fetch nutrition info" }, HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return c.json(
+      { error: "Failed to fetch nutrition info" },
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
+    );
   }
 });
 

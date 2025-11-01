@@ -20,7 +20,18 @@ PARTIALLY_STAGED=$(git diff --name-only)
 git stash push --quiet --keep-index --message "pre-commit-stash" || true
 STASHED=$?
 
+# Run Biome linting first (with auto-fix)
+echo "🔍 Running Biome linting checks..."
+bun x biome check --write .
+LINT_EXIT_CODE=$?
+
+if [ $LINT_EXIT_CODE -ne 0 ]; then
+  echo "❌ Biome linting failed. Please fix the issues and try again."
+  exit $LINT_EXIT_CODE
+fi
+
 # Run formatter on the staged files
+echo "✨ Running Ultracite formatter..."
 bun x ultracite fix
 FORMAT_EXIT_CODE=$?
 

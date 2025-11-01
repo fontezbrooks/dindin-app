@@ -10,9 +10,9 @@
     "prebuild": "expo prebuild",
     "eas": "eas build --platform ios",
     "eas:dev": "eas build --platform ios --profile development",
-    "format": "biome format --write --reporter=rdjson",
-    "lint": "biome lint --write --reporter=rdjson",
-    "imports": "biome check --write --reporter=rdjson",
+    "format": "biome format --writen",
+    "lint": "biome lint --writen",
+    "imports": "biome check --writen",
     "test": "jest"
   },
   "dependencies": {

@@ -3,7 +3,11 @@ import { ObjectId } from "mongodb";
 import { getDB } from "../config/database";
 import type { Recipe, User } from "../types";
 
-const recipeRoutes = new Hono();
+type Variables = {
+  user: User;
+};
+
+const recipeRoutes = new Hono<{ Variables: Variables }>();
 
 // Get all recipes with filters
 recipeRoutes.get("/", async (c) => {
@@ -139,7 +143,7 @@ recipeRoutes.get("/swipe/batch", async (c) => {
     return c.json({
       recipes,
       hasMore: true, // For random recipes, we can always get more
-      nextCursor: new Date().getTime().toString(), // Use timestamp as cursor for random batches
+      nextCursor: Date.now().toString(), // Use timestamp as cursor for random batches
     });
   } catch (error) {
     return c.json({ error: "Failed to fetch recipes for swiping" }, 500);

@@ -1,10 +1,17 @@
 import type { Redis } from "ioredis";
+import { ConsoleTransport, LogLayer } from "loglayer";
 import {
   CACHE_KEYS,
   closeRedisConnection,
   getRedisClient,
   TTL_CONFIG,
 } from "../config/redis";
+
+const log = new LogLayer({
+  transport: new ConsoleTransport({
+    logger: console,
+  }),
+});
 
 export type CacheStats = {
   hits: number;
@@ -18,7 +25,16 @@ export type CacheOptions = {
   fallbackOnError?: boolean; // Whether to continue on cache errors
   compress?: boolean; // Whether to compress large values
 };
-
+// Cache validation constants
+const CACHE_CONSTANTS = {
+  KEY_VALIDATION_REGEX: /^[a-zA-Z0-9:_\-.]+$/,
+  MAX_KEY_LENGTH: 512,
+  MAX_VALUE_SIZE_MB: 5,
+  KILOBYTE: 1024,
+  MAX_TTL_DAYS: 30,
+  SECONDS_PER_DAY: 86_400,
+  HIT_RATE_PERCENTAGE: 100,
+} as const;
 export class CacheService {
   private readonly redis: Redis;
   private stats: CacheStats = {
@@ -35,23 +51,57 @@ export class CacheService {
   }
 
   /**
+   * Validate cache key to prevent injection attacks
+   */
+  private validateKey(key: string): boolean {
+    if (!key || key.length > CACHE_CONSTANTS.MAX_KEY_LENGTH) {
+      log.error(`Invalid cache key length: ${key?.length || 0}`);
+      return false;
+    }
+
+    if (!CACHE_CONSTANTS.KEY_VALIDATION_REGEX.test(key)) {
+      log.error("Invalid cache key format");
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Validate cache value size
+   */
+  private validateValue<T>(value: T): boolean {
+    const serialized =
+      typeof value === "string" ? value : JSON.stringify(value);
+    const maxValueSize =
+      CACHE_CONSTANTS.MAX_VALUE_SIZE_MB *
+      CACHE_CONSTANTS.KILOBYTE *
+      CACHE_CONSTANTS.KILOBYTE;
+    if (serialized.length > maxValueSize) {
+      log.error(`Cache value too large: ${serialized.length} bytes`);
+      return false;
+    }
+    return true;
+  }
+
+  /**
    * Check if Redis is available
    */
   private async checkAvailability(): Promise<void> {
     try {
       await this.redis.ping();
       this.isAvailable = true;
-    } catch (error) {
+    } catch (_error) {
       this.isAvailable = false;
-      console.warn("Redis is not available, cache operations will be skipped");
+      log.warn("Redis is not available, cache operations will be skipped");
     }
   }
 
   /**
    * Get value from cache with type safety
    */
-  async get(key: string): Promise<JSON | string | null> {
-    if (!this.isAvailable) {
+  async get<T = unknown>(key: string): Promise<T | null> {
+    if (!(this.isAvailable && this.validateKey(key))) {
       this.stats.misses++;
       return null;
     }
@@ -69,14 +119,14 @@ export class CacheService {
 
       // Parse JSON if it's a valid JSON string
       try {
-        return JSON.parse(value) as JSON;
+        return JSON.parse(value) as T;
       } catch {
         // Return as string if not valid JSON
-        return value as string;
+        return value as T;
       }
     } catch (error) {
       this.stats.errors++;
-      console.error(`Cache get error for key ${key}:`, error);
+      log.error(`Cache get error: ${error}`);
       return null;
     }
   }
@@ -84,8 +134,14 @@ export class CacheService {
   /**
    * Set value in cache with optional TTL
    */
-  async set(key: string, value: JSON | string, ttl?: number): Promise<boolean> {
-    if (!this.isAvailable) {
+  async set<T = unknown>(
+    key: string,
+    value: T,
+    ttl?: number
+  ): Promise<boolean> {
+    if (
+      !(this.isAvailable && this.validateKey(key) && this.validateValue(value))
+    ) {
       return false;
     }
 
@@ -102,7 +158,7 @@ export class CacheService {
       return true;
     } catch (error) {
       this.stats.errors++;
-      console.error(`Cache set error for key ${key}:`, error);
+      log.error(`Cache set error: ${error}`);
       return false;
     }
   }
@@ -117,10 +173,14 @@ export class CacheService {
 
     try {
       const keys = Array.isArray(key) ? key : [key];
+      // Validate all keys
+      if (!keys.every((k) => this.validateKey(k))) {
+        return 0;
+      }
       return await this.redis.del(...keys);
     } catch (error) {
       this.stats.errors++;
-      console.error(`Cache delete error for key(s) ${key}:`, error);
+      log.error(`Cache delete error: ${error}`);
       return 0;
     }
   }
@@ -129,7 +189,7 @@ export class CacheService {
    * Check if key exists
    */
   async exists(key: string): Promise<boolean> {
-    if (!this.isAvailable) {
+    if (!(this.isAvailable && this.validateKey(key))) {
       return false;
     }
 
@@ -138,7 +198,7 @@ export class CacheService {
       return result === 1;
     } catch (error) {
       this.stats.errors++;
-      console.error(`Cache exists error for key ${key}:`, error);
+      log.error(`Cache exists error: ${error}`);
       return false;
     }
   }
@@ -147,7 +207,11 @@ export class CacheService {
    * Set expiration time for a key
    */
   async expire(key: string, seconds: number): Promise<boolean> {
-    if (!this.isAvailable) {
+    if (
+      !(this.isAvailable && this.validateKey(key)) ||
+      seconds < 0 ||
+      seconds > CACHE_CONSTANTS.SECONDS_PER_DAY * CACHE_CONSTANTS.MAX_TTL_DAYS
+    ) {
       return false;
     }
 
@@ -156,13 +220,13 @@ export class CacheService {
       return result === 1;
     } catch (error) {
       this.stats.errors++;
-      console.error(`Cache expire error for key ${key}:`, error);
+      log.error(`Cache expire error: ${error}`);
       return false;
     }
   }
 
   /**
-   * Delete all keys matching a pattern
+   * Delete all keys matching a pattern using SCAN for better performance
    */
   async flushPattern(pattern: string): Promise<number> {
     if (!this.isAvailable) {
@@ -170,16 +234,43 @@ export class CacheService {
     }
 
     try {
-      const keys = await this.redis.keys(pattern);
+      const stream = this.redis.scanStream({
+        match: pattern,
+        count: 100,
+      });
 
-      if (keys.length === 0) {
-        return 0;
-      }
+      const keys: string[] = [];
 
-      return await this.redis.del(...keys);
+      return await new Promise((resolve) => {
+        stream.on("data", (batch) => {
+          keys.push(...batch);
+        });
+
+        stream.on("end", async () => {
+          if (keys.length === 0) {
+            resolve(0);
+            return;
+          }
+
+          try {
+            const deleted = await this.redis.del(...keys);
+            resolve(deleted);
+          } catch (delError) {
+            this.stats.errors++;
+            log.error(`Cache delete error for pattern: ${delError}`);
+            resolve(0);
+          }
+        });
+
+        stream.on("error", (error) => {
+          this.stats.errors++;
+          log.error(`Cache scan error for pattern: ${error}`);
+          resolve(0);
+        });
+      });
     } catch (error) {
       this.stats.errors++;
-      console.error(`Cache flush pattern error for ${pattern}:`, error);
+      log.error(`Cache flush pattern error: ${error}`);
       return 0;
     }
   }
@@ -187,11 +278,11 @@ export class CacheService {
   /**
    * Get or set cache with fallback function
    */
-  async getOrSet(
+  async getOrSet<T = unknown>(
     key: string,
-    fallbackFn: () => Promise<JSON | string>,
+    fallbackFn: () => Promise<T>,
     ttl?: number
-  ): Promise<JSON | string> {
+  ): Promise<T> {
     // Try to get from cache first
     const cached = await this.get(key);
     if (cached !== null) {
@@ -207,7 +298,7 @@ export class CacheService {
 
       return value;
     } catch (error) {
-      console.error(`Error in getOrSet fallback for key ${key}:`, error);
+      log.error(`Error in getOrSet fallback: ${error}`);
       throw error;
     }
   }
@@ -250,7 +341,8 @@ export class CacheService {
   private updateHitRate(): void {
     const total = this.stats.hits + this.stats.misses;
     if (total > 0) {
-      this.stats.hitRate = (this.stats.hits / total) * 100;
+      this.stats.hitRate =
+        (this.stats.hits / total) * CACHE_CONSTANTS.HIT_RATE_PERCENTAGE;
     }
   }
 
@@ -280,7 +372,7 @@ export class CacheService {
 
       return retrieved === testValue;
     } catch (error) {
-      console.error("Redis health check failed:", error);
+      log.error(`Redis health check failed: ${error}`);
       return false;
     }
   }
@@ -317,14 +409,16 @@ export const CacheHelpers = {
       return await cache.get(CACHE_KEYS.session(sessionId));
     },
 
-    async set(sessionId: string, data: any, status?: string) {
+    async set<T = unknown>(sessionId: string, data: T, status?: string) {
       const cache = getCacheService();
-      const ttl =
-        status === "ACTIVE"
-          ? TTL_CONFIG.session.active
-          : status === "WAITING"
-            ? TTL_CONFIG.session.waiting
-            : TTL_CONFIG.session.default;
+      let ttl: number;
+      if (status === "ACTIVE") {
+        ttl = TTL_CONFIG.session.active;
+      } else if (status === "WAITING") {
+        ttl = TTL_CONFIG.session.waiting;
+      } else {
+        ttl = TTL_CONFIG.session.default;
+      }
 
       return await cache.set(CACHE_KEYS.session(sessionId), data, ttl);
     },
@@ -346,7 +440,7 @@ export const CacheHelpers = {
       return await cache.get(CACHE_KEYS.user(userId));
     },
 
-    async set(userId: string, data: any) {
+    async set<T = unknown>(userId: string, data: T) {
       const cache = getCacheService();
       return await cache.set(
         CACHE_KEYS.user(userId),
@@ -360,7 +454,7 @@ export const CacheHelpers = {
       return await cache.get(CACHE_KEYS.userPreferences(userId));
     },
 
-    async setPreferences(userId: string, preferences: any) {
+    async setPreferences<T = unknown>(userId: string, preferences: T) {
       const cache = getCacheService();
       return await cache.set(
         CACHE_KEYS.userPreferences(userId),
@@ -386,7 +480,7 @@ export const CacheHelpers = {
       return await cache.get(CACHE_KEYS.recipe(recipeId));
     },
 
-    async set(recipeId: string, data: any) {
+    async set<T = unknown>(recipeId: string, data: T) {
       const cache = getCacheService();
       return await cache.set(
         CACHE_KEYS.recipe(recipeId),
@@ -400,7 +494,7 @@ export const CacheHelpers = {
       return await cache.get(CACHE_KEYS.recipeList(filters));
     },
 
-    async setList(data: any, filters?: string) {
+    async setList<T = unknown>(data: T, filters?: string) {
       const cache = getCacheService();
       return await cache.set(
         CACHE_KEYS.recipeList(filters),

@@ -235,12 +235,12 @@ export type HTTPStatus = (typeof HTTPStatus)[keyof typeof HTTPStatus];
 export type CacheInvalidateMethod = "POST" | "PUT" | "PATCH" | "DELETE" | "WS";
 
 export const Calculations = {
-  CACHE_TTL: 3600, // 1 hour
-  X_RATE_LIMIT_RESET: 1000,
-  CLEAN_MEMORY_INTERVAL: 60_000,
-  SESSION_CODE: 36, // 36 characters
-  SUBSTRING: 8,
-  SESSION_MAX_LENGTH: 5,
+  CACHE_TTL: 3600, // 1 hour in seconds
+  X_RATE_LIMIT_RESET: 1000, // Convert seconds to milliseconds
+  CLEAN_MEMORY_INTERVAL: 60_000, // 1 minute in milliseconds
+  SESSION_CODE_RADIX: 36, // Base 36 for alphanumeric session codes
+  SESSION_CODE_LENGTH: 8, // Number of characters in session code
+  SESSION_MAX_PARTICIPANTS: 5, // Maximum participants per session
 };
 
 // Error tracking types

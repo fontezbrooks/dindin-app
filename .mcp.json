@@ -2,11 +2,7 @@
   "mcpServers": {
     "DeepGraph TypeScript MCP": {
       "command": "npx",
-      "args": [
-        "-y",
-        "mcp-code-graph@latest",
-        "microsoft/TypeScript"
-      ]
+      "args": ["-y", "mcp-code-graph@latest", "microsoft/TypeScript"]
     }
   }
 }

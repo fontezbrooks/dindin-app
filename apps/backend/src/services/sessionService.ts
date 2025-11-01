@@ -11,8 +11,8 @@ import {
 
 const generateSessionCode = (): string =>
   Math.random()
-    .toString(Calculations.SESSION_CODE)
-    .substring(2, Calculations.SUBSTRING)
+    .toString(Calculations.SESSION_CODE_RADIX)
+    .substring(2, 2 + Calculations.SESSION_CODE_LENGTH - 2)
     .toUpperCase();
 
 const expiryRegex = /^\d+$/;
@@ -103,9 +103,9 @@ export const joinSession = async (
   }
 
   // Check max participants
-  if (session.participants.length >= Calculations.SESSION_MAX_LENGTH) {
+  if (session.participants.length >= Calculations.SESSION_MAX_PARTICIPANTS) {
     throw new Error(
-      `Session is full (maximum ${Calculations.SESSION_MAX_LENGTH} participants)`
+      `Session is full (maximum ${Calculations.SESSION_MAX_PARTICIPANTS} participants)`
     );
   }
 

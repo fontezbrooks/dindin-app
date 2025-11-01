@@ -1,3 +1,4 @@
+import { ConsoleTransport, LogLayer } from "loglayer";
 import { ObjectId } from "mongodb";
 import { getDB } from "../config/database";
 import { CACHE_KEYS, TTL_CONFIG } from "../config/redis";
@@ -11,17 +12,21 @@ import {
 } from "../types";
 import { CacheHelpers, getCacheService } from "./cache";
 
+const log = new LogLayer({
+  transport: new ConsoleTransport({
+    logger: console,
+  }),
+});
+
 /**
  * Enhanced Session Service with Redis caching
  * Provides fallback to database when cache is unavailable
  */
 const generateSessionCode = (): string =>
   Math.random()
-    .toString(Calculations.SESSION_CODE)
-    .substring(2, Calculations.SUBSTRING)
+    .toString(Calculations.SESSION_CODE_RADIX)
+    .substring(2, 2 + Calculations.SESSION_CODE_LENGTH - 2)
     .toUpperCase();
-
-const expiryRegex = /^\d+$/;
 
 export const createSession = async (hostUser: User): Promise<DinnerSession> => {
   const db = getDB();
@@ -31,7 +36,7 @@ export const createSession = async (hostUser: User): Promise<DinnerSession> => {
   // Check for existing active sessions (for free users)
   if (hostUser.subscription === SubscriptionPlan.FREE) {
     // Try to check from cache first
-    const cachedUserSessions = await cache.get(
+    const cachedUserSessions = await cache.get<string[]>(
       CACHE_KEYS.userSessions(hostUser.clerkUserId)
     );
 
@@ -42,14 +47,11 @@ export const createSession = async (hostUser: User): Promise<DinnerSession> => {
       for (const sessionId of cachedUserSessions) {
         const cachedSession = await cache.get(CACHE_KEYS.session(sessionId));
         if (cachedSession) {
-          const session =
-            typeof cachedSession === "string"
-              ? (JSON.parse(cachedSession) as DinnerSession)
-              : (cachedSession as unknown as DinnerSession);
+          const session = cachedSession as DinnerSession;
           if (
-            [SessionStatus.WAITING, SessionStatus.ACTIVE].includes(
-              session.status
-            )
+            (
+              [SessionStatus.WAITING, SessionStatus.ACTIVE] as SessionStatus[]
+            ).includes(session.status)
           ) {
             activeSessions++;
           }
@@ -128,16 +130,14 @@ export const createSession = async (hostUser: User): Promise<DinnerSession> => {
     ),
   ]);
 
-  console.log(`Session created: ${newSession.sessionCode}`);
+  log.info(`Session created for user ${hostUser.clerkUserId}`);
   return sessionWithId;
 };
 
 export const joinSession = async (
-    sessionCode: string,
-    user: User
-  )
-: Promise<DinnerSession>
-{
+  sessionCode: string,
+  user: User
+): Promise<DinnerSession> => {
   const db = getDB();
   const sessionsCollection = db.collection<DinnerSession>("sessions");
   const cache = getCacheService();
@@ -163,7 +163,7 @@ export const joinSession = async (
       status: { $in: [SessionStatus.WAITING, SessionStatus.ACTIVE] },
     });
 
-    if (session) {
+    if (session?._id) {
       // Cache the session for next time
       await cache.set(
         CACHE_KEYS.session(session._id.toString()),
@@ -194,15 +194,18 @@ export const joinSession = async (
       }
     );
 
-    // Invalidate cache
-    await CacheHelpers.session.invalidate(session._id.toString());
-
-    return session;
+    if (session._id) {
+      // Invalidate cache
+      await CacheHelpers.session.invalidate(session._id.toString());
+      return session;
+    }
   }
 
   // Check max participants
-  if (session.participants.length >= 5) {
-    throw new Error("Session is full (maximum 5 participants)");
+  if (session.participants.length >= Calculations.SESSION_MAX_PARTICIPANTS) {
+    throw new Error(
+      `Session is full (maximum ${Calculations.SESSION_MAX_PARTICIPANTS} participants)`
+    );
   }
 
   // Add new participant
@@ -224,14 +227,16 @@ export const joinSession = async (
     }
   );
 
-  // Invalidate cache and get updated session
-  await CacheHelpers.session.invalidate(session._id.toString());
+  if (session?._id) {
+    // Invalidate cache and get updated session
+    await CacheHelpers.session.invalidate(session._id.toString());
+  }
 
   const updatedSession = await sessionsCollection.findOne({
     _id: session._id,
   });
 
-  if (updatedSession) {
+  if (session?._id && updatedSession) {
     // Re-cache with updated data
     await cache.set(
       CACHE_KEYS.session(session._id.toString()),
@@ -240,9 +245,14 @@ export const joinSession = async (
     );
   }
 
-  console.log(`User ${user.clerkUserId} joined session ${sessionCode}`);
-  return updatedSession!;
-}
+  if (!updatedSession) {
+    throw new Error("Failed to retrieve updated session");
+  }
+
+  log.info("User joined session");
+
+  return updatedSession;
+};
 
 export const leaveSession = async (
   sessionId: string,
@@ -281,16 +291,22 @@ export const leaveSession = async (
   // Invalidate session cache
   await CacheHelpers.session.invalidate(sessionId);
 
-  console.log(`User ${userId} left session ${sessionId}`);
+  log.info("User left session");
 };
 
-export const recordSwipe = async (
-  sessionId: string,
-  userId: string,
-  itemType: "recipe" | "restaurant",
-  itemId: string,
-  direction: "left" | "right"
-): Promise<void> => {
+export const recordSwipe = async ({
+  sessionId,
+  userId,
+  itemType,
+  itemId,
+  direction,
+}: {
+  sessionId: string;
+  userId: string;
+  itemType: "recipe" | "restaurant";
+  itemId: string;
+  direction: "left" | "right";
+}): Promise<void> => {
   const db = getDB();
   const sessionsCollection = db.collection<DinnerSession>("sessions");
   const cache = getCacheService();
@@ -324,10 +340,10 @@ export const recordSwipe = async (
 
   // Check for matches if swiped right
   if (direction === "right") {
-    await CachedSessionService.checkForMatches(sessionId, itemType, itemId);
+    checkForMatches(sessionId, itemType, itemId);
   }
 
-  console.debug(`Swipe recorded: ${userId} swiped ${direction} on ${itemId}`);
+  log.debug("Swipe recorded");
 };
 
 export const checkForMatches = async (
@@ -348,27 +364,37 @@ export const checkForMatches = async (
     });
   }
 
-  if (!session) return;
+  if (!session) {
+    return;
+  }
+
+  type SwipeData = {
+    itemType: string;
+    itemId: { toString: () => string };
+    direction: string;
+    userId: string;
+  };
 
   // Find all users who swiped right on this item
   const rightSwipes = session.swipeData.filter(
-    (swipe) =>
+    (swipe: SwipeData) =>
       swipe.itemType === itemType &&
       swipe.itemId.toString() === itemId &&
       swipe.direction === "right"
-  );
+  ) as SwipeData[];
 
-  const uniqueUsers = [...new Set(rightSwipes.map((s) => s.userId))];
+  const uniqueUsers: string[] = [...new Set(rightSwipes.map((s) => s.userId))];
 
   // If 2 or more users swiped right, it's a match
   if (uniqueUsers.length >= 2) {
     // Check if match already exists
     const existingMatch = session.matches.find(
-      (m) => m.itemType === itemType && m.itemId.toString() === itemId
+      (m: { itemType: string; itemId: { toString: () => string } }) =>
+        m.itemType === itemType && m.itemId.toString() === itemId
     );
 
     if (!existingMatch) {
-      const itemName = await CachedSessionService.getItemName(itemType, itemId);
+      const itemName = await getItemName(itemType, itemId);
 
       const match = {
         itemType,
@@ -389,19 +415,15 @@ export const checkForMatches = async (
       // Invalidate session cache
       await CacheHelpers.session.invalidate(sessionId);
 
-      console.log(
-        `Match found for ${itemType} ${itemId} in session ${sessionId}`
-      );
+      log.info("Match found in session");
     }
   }
 };
 
 export const getItemName = async (
-    itemType: "recipe" | "restaurant",
-    itemId: string
-  )
-: Promise<string>
-{
+  itemType: "recipe" | "restaurant",
+  itemId: string
+): Promise<string> => {
   const cache = getCacheService();
 
   // Try to get from cache first
@@ -410,7 +432,7 @@ export const getItemName = async (
       ? CACHE_KEYS.recipe(itemId)
       : CACHE_KEYS.restaurant(itemId);
 
-  const cachedItem = await cache.get<any>(cacheKey);
+  const cachedItem = await cache.get(cacheKey);
   if (cachedItem) {
     return cachedItem.title || cachedItem.name || "Unknown";
   }
@@ -434,16 +456,14 @@ export const getItemName = async (
   }
 
   return item?.title || item?.name || "Unknown";
-}
+};
 
 export const addMessage = async (
-    sessionId: string,
-    userId: string,
-    username: string,
-    message: string
-  )
-: Promise<void>
-{
+  sessionId: string,
+  userId: string,
+  username: string,
+  message: string
+): Promise<void> => {
   const db = getDB();
   const sessionsCollection = db.collection<DinnerSession>("sessions");
 
@@ -465,8 +485,8 @@ export const addMessage = async (
   // Invalidate session cache
   await CacheHelpers.session.invalidate(sessionId);
 
-  console.debug(`Message added to session ${sessionId} by ${username}`);
-}
+  log.debug("Message added to session");
+};
 
 export const getSession = async (
   sessionId: string
@@ -513,7 +533,7 @@ export const getUserSessions = async (
   // Fetch each session (from cache if possible)
   const sessions: DinnerSession[] = [];
   for (const sessionId of sessionIds) {
-    const session = await CachedSessionService.getSession(sessionId);
+    const session = await getSession(sessionId);
     if (session) {
       sessions.push(session);
     }

@@ -1,17 +1,15 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type {
+  FetchOptions,
+  RawRecipeData,
+  UserPreferences,
+} from "../types/common";
+import type {
   Recipe,
   RecipeBatchResponse,
   RecipeFilters,
   RecipeSwipeAction,
 } from "../types/recipe";
-import type {
-  FetchOptions,
-  RawRecipeData,
-  UserPreferences,
-  isNetworkError as checkNetworkError,
-  getErrorMessage,
-} from "../types/common";
 
 // Configuration
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || "";
@@ -170,7 +168,9 @@ class RecipeService {
    */
   async getUserPreferences(): Promise<RecipeFilters> {
     try {
-      const response = await this.fetchWithRetry<UserPreferences>("/api/users/preferences");
+      const response = await this.fetchWithRetry<UserPreferences>(
+        "/api/users/preferences"
+      );
       return this.mapUserPreferencesToFilters(response);
     } catch (error) {
       console.error("Failed to fetch user preferences:", error);
@@ -186,7 +186,9 @@ class RecipeService {
     return normalizeRecipe(rawRecipe);
   }
 
-  private buildFilterParams(filters?: RecipeFilters): Record<string, string | number> {
+  private buildFilterParams(
+    filters?: RecipeFilters
+  ): Record<string, string | number> {
     if (!filters) {
       return {};
     }
@@ -363,7 +365,9 @@ class RecipeService {
     }
   }
 
-  private mapUserPreferencesToFilters(preferences: UserPreferences): RecipeFilters {
+  private mapUserPreferencesToFilters(
+    preferences: UserPreferences
+  ): RecipeFilters {
     const filters: RecipeFilters = {};
 
     if (preferences.dietaryRestrictions?.length) {

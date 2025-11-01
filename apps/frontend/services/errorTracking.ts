@@ -110,7 +110,7 @@ export class PerformanceTracker {
     });
   }
 
-  static startApiCall(endpoint: string, method: string = "GET") {
+  static startApiCall(endpoint: string, method = "GET") {
     return Sentry.startTransaction({
       name: `${method} ${endpoint}`,
       op: "http.client",
@@ -162,11 +162,11 @@ export class NetworkErrorHandler {
   }
 
   static getErrorMessage(error: unknown): string {
-    if (this.isNetworkError(error)) {
+    if (NetworkErrorHandler.isNetworkError(error)) {
       return "Network connection problem. Please check your internet connection.";
     }
 
-    if (this.isAuthError(error)) {
+    if (NetworkErrorHandler.isAuthError(error)) {
       const err = error as { status?: number; message?: string };
       if (err.status === 401) {
         return "Your session has expired. Please sign in again.";
@@ -207,15 +207,21 @@ export class DevErrorUtils {
     type: "network" | "auth" | "runtime" | "component" = "runtime"
   ): Error {
     switch (type) {
-      case "network":
-        const networkError = new Error("Network request failed") as Error & { name: string };
+      case "network": {
+        const networkError = new Error("Network request failed") as Error & {
+          name: string;
+        };
         networkError.name = "NetworkError";
         return networkError;
+      }
 
-      case "auth":
-        const authError = new Error("Unauthorized access") as Error & { status: number };
+      case "auth": {
+        const authError = new Error("Unauthorized access") as Error & {
+          status: number;
+        };
         authError.status = 401;
         return authError;
+      }
 
       case "component":
         return new TypeError("Cannot read property 'data' of undefined");

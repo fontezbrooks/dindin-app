@@ -1,14 +1,25 @@
 import Redis, { type Redis as RedisClient, type RedisOptions } from "ioredis";
+import { ConsoleTransport, LogLayer } from "loglayer";
 
 // Redis configuration with sensible defaults
+const log = new LogLayer({
+  transport: new ConsoleTransport({
+    logger: console,
+  }),
+});
+
+const minMax = {
+  min: 100,
+  max: 3000,
+};
 export const redisConfig: RedisOptions = {
   host: process.env.REDIS_HOST || "",
-  port: Number.parseInt(process.env.REDIS_PORT || "6379"),
+  port: Number.parseInt(process.env.REDIS_PORT || "6379", 10),
   maxRetriesPerRequest: 3,
   retryStrategy: (times) => {
     // Exponential backoff with max delay of 3 seconds
-    const delay = Math.min(times * 100, 3000);
-    console.warn(`Redis connection attempt ${times}, retrying in ${delay}ms`);
+    const delay = Math.min(times * minMax.min, minMax.max);
+    log.warn(`Redis connection attempt ${times}, retrying in ${delay}ms`);
     return delay;
   },
   reconnectOnError: (err) => {
@@ -102,23 +113,23 @@ export function getRedisClient(): RedisClient {
 
     // Event handlers
     redisClient.on("connect", () => {
-      console.log("🔗 Redis client connected");
+      log.info("🔗 Redis client connected");
     });
 
     redisClient.on("ready", () => {
-      console.log("✅ Redis client ready");
+      log.info("✅ Redis client ready");
     });
 
     redisClient.on("error", (error) => {
-      console.error("❌ Redis client error:", error);
+      log.error(`"❌ Redis client error:" ${error}`);
     });
 
     redisClient.on("close", () => {
-      console.warn("🔌 Redis connection closed");
+      log.warn("🔌 Redis connection closed");
     });
 
     redisClient.on("reconnecting", (delay: number) => {
-      console.log(`🔄 Redis reconnecting in ${delay}ms`);
+      log.info(`🔄 Redis reconnecting in ${delay}ms`);
     });
   }
 
@@ -129,6 +140,6 @@ export async function closeRedisConnection(): Promise<void> {
   if (redisClient) {
     await redisClient.quit();
     redisClient = null;
-    console.log("👋 Redis connection closed gracefully");
+    log.info("👋 Redis connection closed gracefully");
   }
 }

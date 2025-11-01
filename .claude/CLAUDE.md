@@ -1,3 +1,5 @@
+# IMPORTANT
+
 Avoid `accessKey` attr and distracting els
 No `aria-hidden="true"` on focusable els
 No ARIA roles, states, props on unsupported els
@@ -231,7 +233,12 @@ No legacy `React.forwardRef`. Use ref as prop instead (React 19+)
 Use fn comps vs class comps
 No array indices as keys
 No duplicate props in JSX
+No duplicate props in TSX
 No semicolons that change JSX el semantics
+No semicolons that change TSX el semantics
+No use of `<any>` as a type.
+Use `type` instead of `interface`
+No `any` or `unknown` as type constraints or initializing vars to `undefined`
 
 <!-- BACKLOG.MD MCP GUIDELINES START -->
 

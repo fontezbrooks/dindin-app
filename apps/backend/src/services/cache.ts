@@ -50,7 +50,7 @@ export class CacheService {
   /**
    * Get value from cache with type safety
    */
-  async get<T = any>(key: string): Promise<T | null> {
+  async get(key: string): Promise<JSON | string | null> {
     if (!this.isAvailable) {
       this.stats.misses++;
       return null;
@@ -69,10 +69,10 @@ export class CacheService {
 
       // Parse JSON if it's a valid JSON string
       try {
-        return JSON.parse(value) as T;
+        return JSON.parse(value) as JSON;
       } catch {
         // Return as string if not valid JSON
-        return value as T;
+        return value as string;
       }
     } catch (error) {
       this.stats.errors++;
@@ -84,7 +84,7 @@ export class CacheService {
   /**
    * Set value in cache with optional TTL
    */
-  async set<T = any>(key: string, value: T, ttl?: number): Promise<boolean> {
+  async set(key: string, value: JSON | string, ttl?: number): Promise<boolean> {
     if (!this.isAvailable) {
       return false;
     }
@@ -187,13 +187,13 @@ export class CacheService {
   /**
    * Get or set cache with fallback function
    */
-  async getOrSet<T = any>(
+  async getOrSet(
     key: string,
-    fallbackFn: () => Promise<T>,
+    fallbackFn: () => Promise<JSON | string>,
     ttl?: number
-  ): Promise<T> {
+  ): Promise<JSON | string> {
     // Try to get from cache first
-    const cached = await this.get<T>(key);
+    const cached = await this.get(key);
     if (cached !== null) {
       return cached;
     }
@@ -314,7 +314,7 @@ export const CacheHelpers = {
   session: {
     async get(sessionId: string) {
       const cache = getCacheService();
-      return cache.get(CACHE_KEYS.session(sessionId));
+      return await cache.get(CACHE_KEYS.session(sessionId));
     },
 
     async set(sessionId: string, data: any, status?: string) {
@@ -326,7 +326,7 @@ export const CacheHelpers = {
             ? TTL_CONFIG.session.waiting
             : TTL_CONFIG.session.default;
 
-      return cache.set(CACHE_KEYS.session(sessionId), data, ttl);
+      return await cache.set(CACHE_KEYS.session(sessionId), data, ttl);
     },
 
     async invalidate(sessionId: string) {
@@ -343,22 +343,26 @@ export const CacheHelpers = {
   user: {
     async get(userId: string) {
       const cache = getCacheService();
-      return cache.get(CACHE_KEYS.user(userId));
+      return await cache.get(CACHE_KEYS.user(userId));
     },
 
     async set(userId: string, data: any) {
       const cache = getCacheService();
-      return cache.set(CACHE_KEYS.user(userId), data, TTL_CONFIG.user.default);
+      return await cache.set(
+        CACHE_KEYS.user(userId),
+        data,
+        TTL_CONFIG.user.default
+      );
     },
 
     async getPreferences(userId: string) {
       const cache = getCacheService();
-      return cache.get(CACHE_KEYS.userPreferences(userId));
+      return await cache.get(CACHE_KEYS.userPreferences(userId));
     },
 
     async setPreferences(userId: string, preferences: any) {
       const cache = getCacheService();
-      return cache.set(
+      return await cache.set(
         CACHE_KEYS.userPreferences(userId),
         preferences,
         TTL_CONFIG.user.preferences
@@ -379,12 +383,12 @@ export const CacheHelpers = {
   recipe: {
     async get(recipeId: string) {
       const cache = getCacheService();
-      return cache.get(CACHE_KEYS.recipe(recipeId));
+      return await cache.get(CACHE_KEYS.recipe(recipeId));
     },
 
     async set(recipeId: string, data: any) {
       const cache = getCacheService();
-      return cache.set(
+      return await cache.set(
         CACHE_KEYS.recipe(recipeId),
         data,
         TTL_CONFIG.recipe.detail
@@ -393,12 +397,12 @@ export const CacheHelpers = {
 
     async getList(filters?: string) {
       const cache = getCacheService();
-      return cache.get(CACHE_KEYS.recipeList(filters));
+      return await cache.get(CACHE_KEYS.recipeList(filters));
     },
 
     async setList(data: any, filters?: string) {
       const cache = getCacheService();
-      return cache.set(
+      return await cache.set(
         CACHE_KEYS.recipeList(filters),
         data,
         TTL_CONFIG.recipe.list

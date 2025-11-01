@@ -1,12 +1,23 @@
 import type { Context, Next } from "hono";
+import { ConsoleTransport, LogLayer } from "loglayer";
 import { getCacheService } from "../services/cache";
+import { Calculations, HTTPStatus } from "../types";
 
 /**
  * In-memory rate limit store for fallback when Redis is unavailable
  */
+
+const log = new LogLayer({
+  transport: new ConsoleTransport({
+    logger: console,
+  }),
+});
 class InMemoryRateLimiter {
-  private store = new Map<string, { count: number; resetAt: number }>();
-  private cleanupInterval: Timer;
+  private readonly store = new Map<
+    string,
+    { count: number; resetAt: number }
+  >();
+  private readonly cleanupInterval: Timer;
 
   constructor() {
     // Clean up expired entries every minute
@@ -17,7 +28,7 @@ class InMemoryRateLimiter {
           this.store.delete(key);
         }
       }
-    }, 60000);
+    }, Calculations.CLEAN_MEMORY_INTERVAL);
   }
 
   increment(
@@ -25,22 +36,24 @@ class InMemoryRateLimiter {
     window: number
   ): Promise<{ count: number; ttl: number }> {
     const now = Date.now();
-    const resetAt = now + window * 1000;
+    const resetAt = now + window * Calculations.X_RATE_LIMIT_RESET;
 
     const existing = this.store.get(key);
 
     if (!existing || existing.resetAt < now) {
       // New window or expired
       this.store.set(key, { count: 1, resetAt });
-      return { count: 1, ttl: window };
+      return Promise.resolve({ count: 1, ttl: window });
     }
 
     // Increment existing counter
     existing.count++;
-    return {
+    return Promise.resolve({
       count: existing.count,
-      ttl: Math.ceil((existing.resetAt - now) / 1000),
-    };
+      ttl: Math.ceil(
+        (existing.resetAt - now) / Calculations.X_RATE_LIMIT_RESET
+      ),
+    });
   }
 
   destroy() {
@@ -62,6 +75,67 @@ function getInMemoryLimiter(): InMemoryRateLimiter {
     inMemoryLimiter = new InMemoryRateLimiter();
   }
   return inMemoryLimiter;
+}
+
+/**
+ * Attempt to increment rate limit counter using Redis
+ */
+async function tryRedisRateLimit(
+  cache: ReturnType<typeof getCacheService>,
+  key: string,
+  limit: number,
+  window: number
+): Promise<{ count: number; ttl: number } | null> {
+  try {
+    const current = await cache.get<number>(key);
+
+    if (current === null) {
+      // First request in the window
+      await cache.set(key, 1, window);
+      return { count: 1, ttl: window };
+    }
+
+    // Increment counter
+    const count = current + 1;
+    const ttl = window; // Redis handles TTL internally
+
+    if (count <= limit) {
+      await cache.set(key, count, window);
+    }
+
+    return { count, ttl };
+  } catch (error) {
+    log.warn(`Redis rate limiting failed, using in-memory fallback: ${error}`);
+    return null;
+  }
+}
+
+/**
+ * Set rate limit headers on the response
+ */
+function setRateLimitHeaders({
+  c,
+  limit,
+  count,
+  ttl,
+  usingFallback,
+}: {
+  c: Context;
+  limit: number;
+  count: number;
+  ttl: number;
+  usingFallback: boolean;
+}) {
+  c.header("X-RateLimit-Limit", limit.toString());
+  c.header("X-RateLimit-Remaining", Math.max(0, limit - count).toString());
+  c.header(
+    "X-RateLimit-Reset",
+    (Date.now() + ttl * Calculations.X_RATE_LIMIT_RESET).toString()
+  );
+
+  if (process.env.NODE_ENV === "development") {
+    c.header("X-RateLimit-Layer", usingFallback ? "in-memory" : "redis");
+  }
 }
 
 /**
@@ -90,60 +164,28 @@ export function enhancedRateLimitMiddleware(options: {
 
   return async (c: Context, next: Next) => {
     const key = keyGenerator(c);
-    let count: number;
     let ttl: number;
     let usingFallback = false;
-
     // Try Redis first
     const cache = getCacheService();
+    let result: { count: number; ttl: number } | null = null;
+
     if (cache.isHealthy()) {
-      try {
-        const current = await cache.get<number>(key);
+      result = await tryRedisRateLimit(cache, key, limit, window);
+    }
 
-        if (current === null) {
-          // First request in the window
-          count = 1;
-          ttl = window;
-          await cache.set(key, count, window);
-        } else {
-          // Increment counter
-          count = current + 1;
-          ttl = window; // Redis handles TTL internally
-
-          if (count <= limit) {
-            await cache.set(key, count, window);
-          }
-        }
-      } catch (error) {
-        // Redis failed, fall back to in-memory
-        console.warn(
-          "Redis rate limiting failed, using in-memory fallback:",
-          error
-        );
-        const limiter = getInMemoryLimiter();
-        const result = await limiter.increment(key, window);
-        count = result.count;
-        ttl = result.ttl;
-        usingFallback = true;
-      }
-    } else {
-      // Redis not available, use in-memory fallback
+    // Fall back to in-memory if Redis unavailable or failed
+    if (!result) {
       const limiter = getInMemoryLimiter();
-      const result = await limiter.increment(key, window);
-      count = result.count;
-      ttl = result.ttl;
+      result = await limiter.increment(key, window);
       usingFallback = true;
     }
 
-    // Set rate limit headers
-    c.header("X-RateLimit-Limit", limit.toString());
-    c.header("X-RateLimit-Remaining", Math.max(0, limit - count).toString());
-    c.header("X-RateLimit-Reset", (Date.now() + ttl * 1000).toString());
+    const count = result.count;
+    ttl = result.ttl;
 
-    // Add header to indicate which layer is being used (for monitoring)
-    if (process.env.NODE_ENV === "development") {
-      c.header("X-RateLimit-Layer", usingFallback ? "in-memory" : "redis");
-    }
+    // Set rate limit headers
+    setRateLimitHeaders({ c, limit, count, ttl, usingFallback });
 
     // Check if rate limit exceeded
     if (count > limit) {
@@ -153,7 +195,7 @@ export function enhancedRateLimitMiddleware(options: {
           message: `Too many requests, please try again in ${ttl} seconds`,
           retryAfter: ttl,
         },
-        429
+        HTTPStatus.RATE_LIMIT_EXCEEDED
       );
     }
 

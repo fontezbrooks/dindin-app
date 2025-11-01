@@ -2,8 +2,13 @@ import { Hono } from "hono";
 import { sessionCacheMiddleware } from "../middleware/cache";
 import { CachedSessionService } from "../services/cachedSessionService";
 import type { User } from "../types";
+import { HTTPStatus } from "../types";
 
-const cachedSessionRoutes = new Hono();
+type Variables = {
+  user: User;
+};
+
+const cachedSessionRoutes = new Hono<{ Variables: Variables }>();
 
 // Apply session-specific cache middleware to GET routes
 cachedSessionRoutes.use("/:sessionId", sessionCacheMiddleware());
@@ -14,9 +19,9 @@ cachedSessionRoutes.post("/", async (c) => {
   try {
     const user = c.get("user") as User;
     const session = await CachedSessionService.createSession(user);
-    return c.json(session, 201);
-  } catch (error: any) {
-    return c.json({ error: error.message }, 400);
+    return c.json(session, HTTPStatus.CREATED);
+  } catch (error: unknown) {
+    return c.json({ error: (error as Error).message }, HTTPStatus.BAD_REQUEST);
   }
 });
 
@@ -27,13 +32,19 @@ cachedSessionRoutes.post("/join", async (c) => {
     const { sessionCode } = await c.req.json();
 
     if (!sessionCode) {
-      return c.json({ error: "Session code is required" }, 400);
+      return c.json(
+        { error: "Session code is required" },
+        HTTPStatus.BAD_REQUEST
+      );
     }
 
     const session = await CachedSessionService.joinSession(sessionCode, user);
     return c.json(session);
-  } catch (error: any) {
-    return c.json({ error: error.message }, 400);
+  } catch (error: unknown) {
+    return c.json(
+      { error: (error as Error).message },
+      HTTPStatus.INTERNAL_SERVER_ERROR
+    );
   }
 });
 
@@ -44,7 +55,7 @@ cachedSessionRoutes.get("/:sessionId", async (c) => {
     const session = await CachedSessionService.getSession(sessionId);
 
     if (!session) {
-      return c.json({ error: "Session not found" }, 404);
+      return c.json({ error: "Session not found" }, HTTPStatus.NOT_FOUND);
     }
 
     // Check if user is participant
@@ -54,12 +65,18 @@ cachedSessionRoutes.get("/:sessionId", async (c) => {
     );
 
     if (!isParticipant && session.hostUserId !== user.clerkUserId) {
-      return c.json({ error: "Not authorized to view this session" }, 403);
+      return c.json(
+        { error: "Not authorized to view this session" },
+        HTTPStatus.FORBIDDEN
+      );
     }
 
     return c.json(session);
-  } catch (error: any) {
-    return c.json({ error: error.message }, 500);
+  } catch (error: unknown) {
+    return c.json(
+      { error: (error as Error).message },
+      HTTPStatus.INTERNAL_SERVER_ERROR
+    );
   }
 });
 
@@ -71,8 +88,11 @@ cachedSessionRoutes.post("/:sessionId/leave", async (c) => {
 
     await CachedSessionService.leaveSession(sessionId, user.clerkUserId);
     return c.json({ message: "Successfully left session" });
-  } catch (error: any) {
-    return c.json({ error: error.message }, 400);
+  } catch (error: unknown) {
+    return c.json(
+      { error: (error as Error).message },
+      HTTPStatus.INTERNAL_SERVER_ERROR
+    );
   }
 });
 
@@ -86,29 +106,32 @@ cachedSessionRoutes.post("/:sessionId/swipe", async (c) => {
     if (!(itemType && itemId && direction)) {
       return c.json(
         { error: "itemType, itemId, and direction are required" },
-        400
+        HTTPStatus.BAD_REQUEST
       );
     }
 
     if (!["recipe", "restaurant"].includes(itemType)) {
-      return c.json({ error: "Invalid item type" }, 400);
+      return c.json({ error: "Invalid item type" }, HTTPStatus.BAD_REQUEST);
     }
 
     if (!["left", "right"].includes(direction)) {
-      return c.json({ error: "Invalid swipe direction" }, 400);
+      return c.json(
+        { error: "Invalid swipe direction" },
+        HTTPStatus.BAD_REQUEST
+      );
     }
 
-    await CachedSessionService.recordSwipe(
+    await CachedSessionService.recordSwipe({
       sessionId,
-      user.clerkUserId,
+      userId: user.clerkUserId,
       itemType,
       itemId,
-      direction
-    );
+      direction,
+    });
 
     return c.json({ message: "Swipe recorded successfully" });
   } catch (error: any) {
-    return c.json({ error: error.message }, 400);
+    return c.json({ error: error.message }, HTTPStatus.INTERNAL_SERVER_ERROR);
   }
 });
 
@@ -120,7 +143,7 @@ cachedSessionRoutes.post("/:sessionId/messages", async (c) => {
     const { message } = await c.req.json();
 
     if (!message) {
-      return c.json({ error: "Message is required" }, 400);
+      return c.json({ error: "Message is required" }, HTTPStatus.BAD_REQUEST);
     }
 
     await CachedSessionService.addMessage(
@@ -131,8 +154,11 @@ cachedSessionRoutes.post("/:sessionId/messages", async (c) => {
     );
 
     return c.json({ message: "Message added successfully" });
-  } catch (error: any) {
-    return c.json({ error: error.message }, 400);
+  } catch (error: unknown) {
+    return c.json(
+      { error: (error as Error).message },
+      HTTPStatus.INTERNAL_SERVER_ERROR
+    );
   }
 });
 
@@ -144,13 +170,16 @@ cachedSessionRoutes.get("/user/:userId", async (c) => {
 
     // Users can only get their own sessions
     if (userId !== user.clerkUserId) {
-      return c.json({ error: "Not authorized" }, 403);
+      return c.json({ error: "Not authorized" }, HTTPStatus.FORBIDDEN);
     }
 
     const sessions = await CachedSessionService.getUserSessions(userId);
     return c.json(sessions);
-  } catch (error: any) {
-    return c.json({ error: error.message }, 500);
+  } catch (error: unknown) {
+    return c.json(
+      { error: (error as Error).message },
+      HTTPStatus.INTERNAL_SERVER_ERROR
+    );
   }
 });
 

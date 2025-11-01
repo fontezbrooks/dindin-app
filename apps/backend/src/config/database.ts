@@ -1,13 +1,19 @@
+import { ConsoleTransport, LogLayer } from "loglayer";
 import { type Db, MongoClient } from "mongodb";
 
-let client: MongoClient;
-let db: Db;
+let client: MongoClient | null = null;
+let db: Db | null = null;
 
 export async function connectDB(): Promise<Db> {
   if (db) {
     return db;
   }
 
+  const log = new LogLayer({
+    transport: new ConsoleTransport({
+      logger: console,
+    }),
+  });
   try {
     const uri = process.env.MONGODB_URI || "";
     const dbName = process.env.DATABASE_NAME || "";
@@ -17,14 +23,14 @@ export async function connectDB(): Promise<Db> {
 
     db = client.db(dbName);
 
-    console.log(`👍 MongoDB connected to database: ${dbName}`);
+    log.info(`👍 MongoDB connected to database: ${dbName}`);
 
     // Create indexes
     await createIndexes(db);
 
     return db;
   } catch (error) {
-    console.error(`MongoDB connection error: ${error}`);
+    log.error(`MongoDB connection error: ${error}`);
     throw error;
   }
 }
@@ -67,7 +73,7 @@ export function getDB(): Db {
   return db;
 }
 
-export async function closeDB() {
+export async function closeDB(): Promise<void> {
   if (client) {
     await client.close();
     client = null;

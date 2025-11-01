@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { HTTPStatus } from "../types/index";
 
 const authRoutes = new Hono();
 
@@ -15,7 +16,10 @@ authRoutes.get("/verify", async (c) => {
     const authHeader = c.req.header("Authorization");
 
     if (!authHeader?.startsWith("Bearer ")) {
-      return await c.json({ error: "No token provided" }, 401);
+      return await c.json(
+        { error: "No token provided" },
+        HTTPStatus.UNAUTHORIZED
+      );
     }
 
     // This endpoint can be used by the frontend to verify authentication
@@ -24,8 +28,8 @@ authRoutes.get("/verify", async (c) => {
       authenticated: true,
       message: "Token is valid",
     });
-  } catch (error) {
-    return c.json({ error: "Invalid token" }, 401);
+  } catch (_error) {
+    return c.json({ error: "Invalid token" }, HTTPStatus.UNAUTHORIZED);
   }
 });
 

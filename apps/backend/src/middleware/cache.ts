@@ -1,5 +1,7 @@
 import type { Context, Next } from "hono";
+import { ConsoleTransport, LogLayer } from "loglayer";
 import { getCacheService } from "../services/cache";
+import { Calculations, HTTPStatus } from "../types";
 
 type CacheMiddlewareOptions = {
   keyGenerator?: (c: Context) => string;
@@ -7,6 +9,13 @@ type CacheMiddlewareOptions = {
   condition?: (c: Context) => boolean;
   invalidateOn?: string[]; // HTTP methods that invalidate cache
 };
+const log = new LogLayer({
+  transport: new ConsoleTransport({
+    logger: console,
+  }),
+});
+
+const regexSpecialChars = /\/$/;
 
 /**
  * Cache middleware for Hono routes
@@ -38,9 +47,12 @@ export function cacheMiddleware(options: CacheMiddlewareOptions = {}) {
       await next();
 
       // Invalidate related cache entries after successful mutation
-      if (c.res.status >= 200 && c.res.status < 300) {
+      if (
+        c.res.status >= HTTPStatus.OK &&
+        c.res.status < HTTPStatus.MULTIPLE_CHOICES
+      ) {
         await cache.flushPattern(`${cacheKey}*`);
-        console.debug(`Cache invalidated for pattern: ${cacheKey}*`);
+        log.debug(`Cache invalidated for pattern: ${cacheKey}*`);
       }
 
       return;
@@ -54,7 +66,7 @@ export function cacheMiddleware(options: CacheMiddlewareOptions = {}) {
     // Try to get from cache
     const cached = await cache.get(cacheKey);
     if (cached) {
-      console.debug(`Cache hit for key: ${cacheKey}`);
+      log.debug(`Cache hit for key: ${cacheKey}`);
 
       // Set cache headers
       c.header("X-Cache", "HIT");
@@ -64,13 +76,16 @@ export function cacheMiddleware(options: CacheMiddlewareOptions = {}) {
       return c.json(cached);
     }
 
-    console.debug(`Cache miss for key: ${cacheKey}`);
+    log.debug(`Cache miss for key: ${cacheKey}`);
 
     // Execute route handler
     await next();
 
     // Cache successful responses
-    if (c.res.status >= 200 && c.res.status < 300) {
+    if (
+      c.res.status >= HTTPStatus.OK &&
+      c.res.status < HTTPStatus.MULTIPLE_CHOICES
+    ) {
       try {
         // Clone response to read body
         const response = c.res.clone();
@@ -83,7 +98,7 @@ export function cacheMiddleware(options: CacheMiddlewareOptions = {}) {
         c.header("X-Cache", "MISS");
         c.header("X-Cache-Key", cacheKey);
       } catch (error) {
-        console.error("Error caching response:", error);
+        log.error(`Error caching response: ${error}`);
       }
     }
   };
@@ -95,7 +110,7 @@ export function cacheMiddleware(options: CacheMiddlewareOptions = {}) {
  */
 function defaultKeyGenerator(c: Context): string {
   const url = new URL(c.req.url);
-  const path = url.pathname.replace(/\/$/, ""); // Remove trailing slash
+  const path = url.pathname.replace(regexSpecialChars, ""); // Remove trailing slash
   const query = url.search;
 
   return `api:${path}${query}`;
@@ -140,7 +155,7 @@ export function contentCacheMiddleware(type: "recipe" | "restaurant") {
 
       return id ? `${type}:${id}` : `${type}:list${filters}`;
     },
-    ttl: type === "recipe" ? 3600 : 3600, // 1 hour for content
+    ttl: type === "recipe" ? Calculations.CACHE_TTL : Calculations.CACHE_TTL, // 1 hour for content
   });
 }
 
@@ -186,14 +201,17 @@ export function rateLimitMiddleware(
       // Rate limit exceeded
       c.header("X-RateLimit-Limit", limit.toString());
       c.header("X-RateLimit-Remaining", "0");
-      c.header("X-RateLimit-Reset", (Date.now() + window * 1000).toString());
+      c.header(
+        "X-RateLimit-Reset",
+        (Date.now() + window * Calculations.X_RATE_LIMIT_RESET).toString()
+      );
 
       return c.json(
         {
           error: "Rate limit exceeded",
           message: "Too many requests, please try again later",
         },
-        429
+        HTTPStatus.RATE_LIMIT_EXCEEDED
       );
     } else {
       // Increment counter
@@ -221,15 +239,30 @@ export async function warmCache(patterns: {
   const cache = await getCacheService();
 
   if (!cache.isHealthy()) {
-    console.warn("Cache not available, skipping cache warming");
+    log.warn("Cache not available, skipping cache warming");
     return;
   }
 
-  console.log("Starting cache warming...");
+  log.info("Starting cache warming...");
 
-  // Add cache warming logic here based on your needs
-  // This would typically fetch popular or frequently accessed data
-  // and pre-populate the cache
+  // Selective cache warming based on patterns
+  if (patterns.recipes) {
+    log.info("Warming recipe cache...");
+    // Fetch and cache popular recipes
+    // await cache.set('popular-recipes', await getPopularRecipes());
+  }
 
-  console.log("Cache warming completed");
+  if (patterns.restaurants) {
+    log.info("Warming restaurant cache...");
+    // Fetch and cache restaurant data
+    // await cache.set('active-restaurants', await getActiveRestaurants());
+  }
+
+  if (patterns.popular) {
+    log.info("Warming popular items cache...");
+    // Cache popular/trending items
+    // await cache.set('trending-items', await getTrendingItems());
+  }
+
+  log.info("Cache warming completed");
 }

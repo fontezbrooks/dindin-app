@@ -47,10 +47,12 @@ export type DiningHistoryEntry = {
   notes?: string;
 };
 
-export enum SubscriptionPlan {
-  FREE = "free",
-  PRO = "pro",
-}
+export const SubscriptionPlan = {
+  FREE: "free",
+  PRO: "pro",
+} as const;
+export type SubscriptionPlan =
+  (typeof SubscriptionPlan)[keyof typeof SubscriptionPlan];
 
 // Session types
 export type DinnerSession = {
@@ -74,12 +76,13 @@ export type SessionParticipant = {
   isActive: boolean;
 };
 
-export enum SessionStatus {
-  WAITING = "waiting",
-  ACTIVE = "active",
-  COMPLETED = "completed",
-  EXPIRED = "expired",
-}
+export const SessionStatus = {
+  WAITING: "waiting",
+  ACTIVE: "active",
+  COMPLETED: "completed",
+  EXPIRED: "expired",
+} as const;
+export type SessionStatus = (typeof SessionStatus)[keyof typeof SessionStatus];
 
 export type SwipeData = {
   userId: string;
@@ -188,12 +191,67 @@ export type WSMessage = {
   data: any;
 };
 
-export enum WSMessageType {
-  JOIN_SESSION = "join_session",
-  LEAVE_SESSION = "leave_session",
-  SWIPE = "swipe",
-  MATCH_FOUND = "match_found",
-  CHAT_MESSAGE = "chat_message",
-  SESSION_UPDATE = "session_update",
-  ERROR = "error",
-}
+export const WSMessageType = {
+  JOIN_SESSION: "join_session",
+  LEAVE_SESSION: "leave_session",
+  SWIPE: "swipe",
+  MATCH_FOUND: "match_found",
+  CHAT_MESSAGE: "chat_message",
+  SESSION_UPDATE: "session_update",
+  ERROR: "error",
+} as const;
+
+export type WSMessageType = (typeof WSMessageType)[keyof typeof WSMessageType];
+
+export const WSConnectionStatus = {
+  CONNECTED: "connected",
+  DISCONNECTED: "disconnected",
+} as const;
+
+export type WSConnectionStatus =
+  (typeof WSConnectionStatus)[keyof typeof WSConnectionStatus];
+
+export type WSClient = {
+  ws: WebSocket;
+  userId: string;
+  username: string;
+};
+
+export const HTTPStatus = {
+  OK: 200,
+  CREATED: 201,
+  BAD_REQUEST: 400,
+  UNAUTHORIZED: 401,
+  FORBIDDEN: 403,
+  NOT_FOUND: 404,
+  INTERNAL_SERVER_ERROR: 500,
+  SUBSTRING: 7,
+  MULTIPLE_CHOICES: 300,
+  RATE_LIMIT_EXCEEDED: 429,
+} as const;
+
+export type HTTPStatus = (typeof HTTPStatus)[keyof typeof HTTPStatus];
+
+export type CacheInvalidateMethod = "POST" | "PUT" | "PATCH" | "DELETE" | "WS";
+
+export const Calculations = {
+  CACHE_TTL: 3600, // 1 hour
+  X_RATE_LIMIT_RESET: 1000,
+  CLEAN_MEMORY_INTERVAL: 60_000,
+  SESSION_CODE: 36, // 36 characters
+  SUBSTRING: 8,
+  SESSION_MAX_LENGTH: 5,
+};
+
+// Error tracking types
+export type ErrorTrackingConfig = {
+  dsn: string;
+  environment: string;
+  release: string;
+};
+
+export type ErrorTrackingTransaction = {
+  name: string;
+  startTime: number;
+  finish: () => void;
+};

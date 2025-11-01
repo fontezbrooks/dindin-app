@@ -1,23 +1,35 @@
 import { verifyToken } from "@clerk/backend";
 import type { Context, Next } from "hono";
 import { logger } from "hono/logger";
+import { ConsoleTransport, LogLayer } from "loglayer";
 import { getDB } from "../config/database";
-import { SubscriptionPlan, type User } from "../types";
+import { HTTPStatus, SubscriptionPlan, type User } from "../types";
 
 export async function authMiddleware(c: Context, next: Next) {
+  const log = new LogLayer({
+    transport: new ConsoleTransport({
+      logger: console,
+    }),
+  });
   try {
     const authHeader = c.req.header("Authorization");
 
     if (!authHeader?.startsWith("Bearer ")) {
-      return c.json({ error: "Unauthorized - No token provided" }, 401);
+      return c.json(
+        { error: "Unauthorized - No token provided" },
+        HTTPStatus.UNAUTHORIZED
+      );
     }
 
-    const token = authHeader.substring(7);
+    const token = authHeader.substring(HTTPStatus.SUBSTRING);
     const secretKey = process.env.CLERK_SECRET_KEY;
 
     if (!secretKey) {
-      console.error("CLERK_SECRET_KEY not configured");
-      return c.json({ error: "Server configuration error" }, 500);
+      log.error("CLERK_SECRET_KEY not configured");
+      return c.json(
+        { error: "Server configuration error" },
+        HTTPStatus.INTERNAL_SERVER_ERROR
+      );
     }
 
     // Verify the token with Clerk
@@ -26,7 +38,7 @@ export async function authMiddleware(c: Context, next: Next) {
     });
 
     if (!payload) {
-      return c.json({ error: "Invalid token" }, 401);
+      return c.json({ error: "Invalid token" }, HTTPStatus.UNAUTHORIZED);
     }
 
     // Store user info in context
@@ -43,8 +55,8 @@ export async function authMiddleware(c: Context, next: Next) {
       // Create new user if doesn't exist
       const newUser: User = {
         clerkUserId: payload.sub,
-        email: payload.email || "",
-        username: payload.username || undefined,
+        email: String(payload.email) || "",
+        username: String(payload.username) || undefined,
         profile: {
           dietaryPreferences: [],
           cuisinePreferences: [],
@@ -67,7 +79,7 @@ export async function authMiddleware(c: Context, next: Next) {
     await next();
   } catch (error) {
     logger(() => `Auth middleware error: ${error}`);
-    return c.json({ error: "Authentication failed" }, 401);
+    return c.json({ error: "Authentication failed" }, HTTPStatus.UNAUTHORIZED);
   }
 }
 
@@ -76,7 +88,7 @@ export async function requirePro(c: Context, next: Next) {
   const user = c.get("user") as User;
 
   if (!user || user.subscription !== SubscriptionPlan.PRO) {
-    return c.json({ error: "Pro subscription required" }, 403);
+    return c.json({ error: "Pro subscription required" }, HTTPStatus.FORBIDDEN);
   }
 
   await next();

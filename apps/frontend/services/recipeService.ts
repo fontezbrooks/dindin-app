@@ -5,9 +5,16 @@ import type {
   RecipeFilters,
   RecipeSwipeAction,
 } from "../types/recipe";
+import type {
+  FetchOptions,
+  RawRecipeData,
+  UserPreferences,
+  isNetworkError as checkNetworkError,
+  getErrorMessage,
+} from "../types/common";
 
 // Configuration
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000";
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || "";
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 const BATCH_SIZE = 10;
 const MAX_RETRIES = 3;
@@ -73,7 +80,7 @@ class RecipeService {
       .then(async (response) => {
         // Normalize recipe data
         if (response.recipes) {
-          response.recipes = response.recipes.map((recipe: any) =>
+          response.recipes = response.recipes.map((recipe: RawRecipeData) =>
             this.normalizeRecipeData(recipe)
           );
         }
@@ -163,7 +170,7 @@ class RecipeService {
    */
   async getUserPreferences(): Promise<RecipeFilters> {
     try {
-      const response = await this.fetchWithRetry<any>("/api/users/preferences");
+      const response = await this.fetchWithRetry<UserPreferences>("/api/users/preferences");
       return this.mapUserPreferencesToFilters(response);
     } catch (error) {
       console.error("Failed to fetch user preferences:", error);
@@ -173,18 +180,18 @@ class RecipeService {
 
   // Private helper methods
 
-  private normalizeRecipeData(rawRecipe: any): Recipe {
+  private normalizeRecipeData(rawRecipe: RawRecipeData): Recipe {
     // Import the normalizeRecipe function from types
     const { normalizeRecipe } = require("../types/recipe");
     return normalizeRecipe(rawRecipe);
   }
 
-  private buildFilterParams(filters?: RecipeFilters): Record<string, any> {
+  private buildFilterParams(filters?: RecipeFilters): Record<string, string | number> {
     if (!filters) {
       return {};
     }
 
-    const params: Record<string, any> = {};
+    const params: Record<string, string | number> = {};
 
     if (filters.dietaryTags?.length) {
       params.dietaryTags = filters.dietaryTags.join(",");
@@ -213,7 +220,7 @@ class RecipeService {
 
   private async fetchWithRetry<T>(
     endpoint: string,
-    options: any = {},
+    options: FetchOptions = {},
     retries = 0
   ): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
@@ -251,19 +258,25 @@ class RecipeService {
     }
   }
 
-  private isRetriableError(error: any): boolean {
+  private isRetriableError(error: unknown): boolean {
     // Network errors or 5xx server errors
-    return (
-      error.message?.includes("Network") ||
-      error.message?.includes("fetch") ||
-      (error.message?.includes("HTTP") && error.message?.includes("5"))
-    );
+    if (error instanceof Error) {
+      return (
+        error.message.includes("Network") ||
+        error.message.includes("fetch") ||
+        (error.message.includes("HTTP") && error.message.includes("5"))
+      );
+    }
+    return false;
   }
 
-  private isNetworkError(error: any): boolean {
-    return (
-      error.message?.includes("Network") || error.message?.includes("fetch")
-    );
+  private isNetworkError(error: unknown): boolean {
+    if (error instanceof Error) {
+      return (
+        error.message.includes("Network") || error.message.includes("fetch")
+      );
+    }
+    return false;
   }
 
   private delay(ms: number): Promise<void> {
@@ -350,7 +363,7 @@ class RecipeService {
     }
   }
 
-  private mapUserPreferencesToFilters(preferences: any): RecipeFilters {
+  private mapUserPreferencesToFilters(preferences: UserPreferences): RecipeFilters {
     const filters: RecipeFilters = {};
 
     if (preferences.dietaryRestrictions?.length) {

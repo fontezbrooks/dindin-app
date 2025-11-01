@@ -5,7 +5,7 @@ export type ErrorContext = {
   action?: string;
   userId?: string;
   route?: string;
-  additionalData?: Record<string, any>;
+  additionalData?: Record<string, unknown>;
 };
 
 export class ErrorTracker {
@@ -21,7 +21,7 @@ export class ErrorTracker {
     Sentry.setUser(null);
   }
 
-  static setContext(key: string, context: Record<string, any>) {
+  static setContext(key: string, context: Record<string, unknown>) {
     Sentry.setContext(key, context);
   }
 
@@ -133,42 +133,57 @@ export class PerformanceTracker {
 
 // Network error utilities
 export class NetworkErrorHandler {
-  static isNetworkError(error: any): boolean {
+  static isNetworkError(error: unknown): boolean {
+    if (!error || typeof error !== "object") {
+      return false;
+    }
+    const err = error as { name?: string; message?: string; code?: string };
     return (
-      error?.name === "NetworkError" ||
-      error?.message?.toLowerCase().includes("network") ||
-      error?.message?.toLowerCase().includes("fetch") ||
-      error?.message?.toLowerCase().includes("timeout") ||
-      error?.code === "NETWORK_ERROR"
+      err.name === "NetworkError" ||
+      err.message?.toLowerCase().includes("network") ||
+      err.message?.toLowerCase().includes("fetch") ||
+      err.message?.toLowerCase().includes("timeout") ||
+      err.code === "NETWORK_ERROR"
     );
   }
 
-  static isAuthError(error: any): boolean {
+  static isAuthError(error: unknown): boolean {
+    if (!error || typeof error !== "object") {
+      return false;
+    }
+    const err = error as { status?: number; message?: string };
     return (
-      error?.status === 401 ||
-      error?.status === 403 ||
-      error?.message?.toLowerCase().includes("unauthorized") ||
-      error?.message?.toLowerCase().includes("forbidden") ||
-      error?.message?.toLowerCase().includes("auth")
+      err.status === 401 ||
+      err.status === 403 ||
+      err.message?.toLowerCase().includes("unauthorized") ||
+      err.message?.toLowerCase().includes("forbidden") ||
+      err.message?.toLowerCase().includes("auth")
     );
   }
 
-  static getErrorMessage(error: any): string {
+  static getErrorMessage(error: unknown): string {
     if (this.isNetworkError(error)) {
       return "Network connection problem. Please check your internet connection.";
     }
 
     if (this.isAuthError(error)) {
-      if (error?.status === 401) {
+      const err = error as { status?: number; message?: string };
+      if (err.status === 401) {
         return "Your session has expired. Please sign in again.";
       }
-      if (error?.status === 403) {
+      if (err.status === 403) {
         return "You do not have permission to perform this action.";
       }
       return "Authentication problem. Please try signing in again.";
     }
 
-    return error?.message || "An unexpected error occurred.";
+    if (error instanceof Error) {
+      return error.message;
+    }
+    if (typeof error === "object" && error !== null && "message" in error) {
+      return String((error as { message: unknown }).message);
+    }
+    return "An unexpected error occurred.";
   }
 }
 
@@ -176,7 +191,7 @@ export class NetworkErrorHandler {
 export class DevErrorUtils {
   static logErrorBoundaryInfo(
     error: Error,
-    errorInfo: any,
+    errorInfo: { componentStack: string; digest?: string },
     boundaryName: string
   ) {
     if (!__DEV__) return;
@@ -193,13 +208,13 @@ export class DevErrorUtils {
   ): Error {
     switch (type) {
       case "network":
-        const networkError = new Error("Network request failed");
-        (networkError as any).name = "NetworkError";
+        const networkError = new Error("Network request failed") as Error & { name: string };
+        networkError.name = "NetworkError";
         return networkError;
 
       case "auth":
-        const authError = new Error("Unauthorized access");
-        (authError as any).status = 401;
+        const authError = new Error("Unauthorized access") as Error & { status: number };
+        authError.status = 401;
         return authError;
 
       case "component":

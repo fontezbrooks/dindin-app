@@ -5,7 +5,10 @@ import { logger } from "hono/logger";
 import { closeDB, connectDB } from "./config/database";
 import { closeRedisConnection, getRedisClient } from "./config/redis";
 import { authMiddleware } from "./middleware/auth";
-import { rateLimitMiddleware } from "./middleware/cache";
+import {
+  cleanupRateLimiter,
+  enhancedRateLimitMiddleware,
+} from "./middleware/rateLimiter";
 import authRoutes from "./routes/auth";
 import healthRoutes from "./routes/health";
 import recipeRoutes from "./routes/recipes";
@@ -22,14 +25,39 @@ const basePath = process.env.EXPO_PUBLIC_API_URL || "";
 
 // Global middleware
 app.use("*", logger());
-app.use("*", cors());
-app.basePath(basePath);
 
-// Rate limiting middleware (applies to all routes)
+// CORS configuration with specific origins
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim())
+  : ["http://localhost:3000", "http://localhost:8081"];
+
 app.use(
   "*",
-  rateLimitMiddleware({
-    limit: Number.parseInt(process.env.API_RATE_LIMIT),
+  cors({
+    origin: (origin) => {
+      // Allow requests with no origin (mobile apps, Postman, etc.)
+      if (!origin) return "";
+      // Check if origin is in allowed list
+      if (allowedOrigins.includes(origin)) {
+        return origin;
+      }
+      // For development, also allow any localhost origin
+      if (process.env.NODE_ENV === "development" && origin.includes("localhost")) {
+        return origin;
+      }
+      // Reject other origins
+      return null;
+    },
+    credentials: true,
+  })
+);
+app.basePath(basePath);
+
+// Enhanced rate limiting middleware with dual-layer protection
+app.use(
+  "*",
+  enhancedRateLimitMiddleware({
+    limit: Number.parseInt(process.env.API_RATE_LIMIT || "100"),
     window: 60, // 1 minute window
   })
 );
@@ -91,6 +119,7 @@ process.on("SIGINT", async () => {
   console.log("\n🛑 Shutting down gracefully...");
 
   try {
+    cleanupRateLimiter();
     await closeRedisConnection();
     await closeDB();
     console.log("👋 All connections closed");

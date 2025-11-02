@@ -34,6 +34,18 @@
     "test": {
       "dependsOn": ["^test"]
     },
+    "test:watch": {
+      "dependsOn": ["^test:watch"]
+    },
+    "test:coverage": {
+      "dependsOn": ["^test:coverage"]
+    },
+    "test:verbose": {
+      "dependsOn": ["^test:verbose"]
+    },
+    "test:ci": {
+      "dependsOn": ["^test:ci"]
+    },
     "dev": {
       "cache": false,
       "persistent": true

@@ -29,9 +29,11 @@ export const RecipeCardSkeleton: React.FC = () => {
     ).start();
   }, [shimmerAnim]);
 
+  const defaultOpacity = 0.3;
+  const highlightOpacity = 0.7;
   const opacity = shimmerAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.3, 0.7],
+    outputRange: [defaultOpacity, highlightOpacity],
   });
 
   return (

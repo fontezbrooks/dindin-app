@@ -1,5 +1,5 @@
 import { render } from "@testing-library/react-native";
-import React from "react";
+
 import { Text, View } from "react-native";
 import { SwipeableCard } from "../components/SwipeCards";
 
@@ -36,6 +36,14 @@ jest.mock("react-native", () => ({
 }));
 
 describe("SwipeableCard", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   const mockActiveIndex = { value: 0 };
   const mockOnSwipeRight = jest.fn();
   const mockOnSwipeLeft = jest.fn();

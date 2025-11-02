@@ -1,4 +1,4 @@
-import * as Sentry from "@sentry/react-native";
+import { captureException, withScope } from "@sentry/react-native";
 import type React from "react";
 import { Component, type ReactNode } from "react";
 import { StyleSheet } from "react-native";
@@ -75,7 +75,7 @@ export class ErrorBoundary extends Component<
     };
 
     // Set Sentry context
-    Sentry.withScope((scope) => {
+    withScope((scope) => {
       scope.setTag("errorBoundary", errorContext.boundary);
       scope.setTag("errorLevel", level);
       scope.setLevel("error");
@@ -84,7 +84,7 @@ export class ErrorBoundary extends Component<
         stack: errorInfo.componentStack,
       });
 
-      const eventId = Sentry.captureException(error);
+      const eventId = captureException(error);
 
       this.setState({
         errorInfo,

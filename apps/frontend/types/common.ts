@@ -5,12 +5,12 @@
 /**
  * API Error response structure
  */
-export interface ApiError {
+export type ApiError = {
   message: string;
   code?: string;
   status?: number;
   details?: Record<string, unknown>;
-}
+};
 
 /**
  * Network error structure
@@ -24,38 +24,38 @@ export interface NetworkError extends Error {
 /**
  * User preferences from API
  */
-export interface UserPreferences {
+export type UserPreferences = {
   dietaryRestrictions?: string[];
   cuisinePreferences?: string[];
   maxCookingTime?: number;
   allergies?: string[];
   skillLevel?: "beginner" | "intermediate" | "advanced";
-}
+};
 
 /**
  * API Response wrapper
  */
-export interface ApiResponse<T> {
+export type ApiResponse<T> = {
   data?: T;
   error?: ApiError;
   success: boolean;
-}
+};
 
 /**
  * Fetch options for API calls
  */
-export interface FetchOptions {
+export type FetchOptions = {
   method?: "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
   headers?: Record<string, string>;
   body?: string;
   params?: Record<string, string | number | boolean>;
   signal?: AbortSignal;
-}
+};
 
 /**
  * Raw recipe data from backend (before normalization)
  */
-export interface RawRecipeData {
+export type RawRecipeData = {
   _id: string | { $oid: string };
   title: string;
   description: string;
@@ -94,15 +94,15 @@ export interface RawRecipeData {
   servings?: number;
   isActive?: boolean;
   likes?: number;
-}
+};
 
 /**
  * Error info for error boundaries
  */
-export interface ErrorInfo {
+export type ErrorInfo = {
   componentStack: string;
   digest?: string;
-}
+};
 
 /**
  * Type guard to check if error is a NetworkError

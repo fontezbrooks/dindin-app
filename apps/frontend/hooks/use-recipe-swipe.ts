@@ -1,11 +1,5 @@
 import { useAuth } from "@clerk/clerk-expo";
-import {
-  createRef,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-} from "react";
+import { createRef, useCallback, useEffect, useMemo, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type { SwipeableCardRefType } from "../components/SwipeCards";
 import { recipeService } from "../services/recipeService";
@@ -28,7 +22,11 @@ type UseRecipeSwipeOptions = {
 };
 
 export const useRecipeSwipe = (options: UseRecipeSwipeOptions = {}) => {
-  const { sessionId = useSessionStore.getState().sessionId, filters, onMatch } = options;
+  const {
+    sessionId = useSessionStore.getState().sessionId,
+    filters,
+    onMatch,
+  } = options;
   const { getToken } = useAuth();
 
   // Zustand stores
@@ -100,7 +98,9 @@ export const useRecipeSwipe = (options: UseRecipeSwipeOptions = {}) => {
   // Load recipes
   const loadRecipes = useCallback(
     async (isInitial = false, cursor?: string) => {
-      if (loadingNextBatch.current && !isInitial) return;
+      if (loadingNextBatch.current && !isInitial) {
+        return;
+      }
 
       loadingNextBatch.current = true;
       setLoading(isInitial);
@@ -174,9 +174,17 @@ export const useRecipeSwipe = (options: UseRecipeSwipeOptions = {}) => {
 
   // Load more when running low on cards
   useEffect(() => {
-    if (!hasInitiallyLoaded.current) return;
+    if (!hasInitiallyLoaded.current) {
+      return;
+    }
 
-    if (isNearEnd && hasMore && !loadingNextBatch.current && nextCursor && !isLoading) {
+    if (
+      isNearEnd &&
+      hasMore &&
+      !loadingNextBatch.current &&
+      nextCursor &&
+      !isLoading
+    ) {
       loadRecipes(false, nextCursor);
     }
   }, [isNearEnd, hasMore, nextCursor, isLoading, loadRecipes]);
@@ -215,18 +223,30 @@ export const useRecipeSwipe = (options: UseRecipeSwipeOptions = {}) => {
         }
       }
     },
-    [currentRecipe, sessionId, isSessionActive, recordSwipe, markSwipeAsSynced, onMatch, addMatch]
+    [
+      currentRecipe,
+      sessionId,
+      isSessionActive,
+      recordSwipe,
+      markSwipeAsSynced,
+      onMatch,
+      addMatch,
+    ]
   );
 
   const swipeRight = useCallback(() => {
-    if (!refs[currentIndex]) return;
+    if (!refs[currentIndex]) {
+      return;
+    }
 
     refs[currentIndex].current?.swipeRight();
     handleSwipe("like");
   }, [currentIndex, refs, handleSwipe]);
 
   const swipeLeft = useCallback(() => {
-    if (!refs[currentIndex]) return;
+    if (!refs[currentIndex]) {
+      return;
+    }
 
     refs[currentIndex].current?.swipeLeft();
     handleSwipe("dislike");
@@ -254,13 +274,17 @@ export const useRecipeSwipe = (options: UseRecipeSwipeOptions = {}) => {
   }, [refs, reset, loadRecipes]);
 
   const undo = useCallback(() => {
-    if (currentIndex <= 0) return;
+    if (currentIndex <= 0) {
+      return;
+    }
     undoLastSwipe();
   }, [currentIndex, undoLastSwipe]);
 
   // Sync offline swipes when reconnected
   useEffect(() => {
-    if (!sessionId || !isSessionActive()) return;
+    if (!(sessionId && isSessionActive())) {
+      return;
+    }
 
     const syncOfflineSwipes = async () => {
       const pendingSwipes = getPendingSyncs();
@@ -269,7 +293,11 @@ export const useRecipeSwipe = (options: UseRecipeSwipeOptions = {}) => {
       try {
         // Sync all pending swipes
         for (const swipe of pendingSwipes) {
-          await recipeService.recordSwipe(sessionId, swipe.recipeId, swipe.action);
+          await recipeService.recordSwipe(
+            sessionId,
+            swipe.recipeId,
+            swipe.action
+          );
           markSwipeAsSynced(swipe.recipeId);
         }
       } catch (error) {

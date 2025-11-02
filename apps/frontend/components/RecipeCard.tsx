@@ -49,15 +49,17 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
   };
 
   const formatDietaryTags = (tags: string[]) => {
-    if (!tags || tags.length === 0) return null;
+    if (!tags || tags.length === 0) {
+      return null;
+    }
     // Show max 2 tags to avoid clutter
     const displayTags = tags.slice(0, 2);
     const remaining = tags.length - 2;
 
     return (
       <View style={styles.dietaryTags}>
-        {displayTags.map((tag, index) => (
-          <View key={index} style={styles.dietaryTag}>
+        {displayTags.map((tag) => (
+          <View key={tag} style={styles.dietaryTag}>
             <Text style={styles.dietaryTagText}>{tag}</Text>
           </View>
         ))}

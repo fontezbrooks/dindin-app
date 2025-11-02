@@ -49,18 +49,19 @@ const SwipeableCard = ({
   const nextActiveIndex = useSharedValue(Math.floor(activeIndex.value));
 
   const { width } = useWindowDimensions();
-  const maxCardTranslation = width * 1.5;
+  const translationMultiplier = 1.5;
+  const maxCardTranslation = width * translationMultiplier;
 
   const swipeRight = useCallback(() => {
     onSwipeRight?.();
     translateX.value = withSpring(maxCardTranslation);
-    activeIndex.value = activeIndex.value + 1;
+    activeIndex.value += 1;
   }, [activeIndex, maxCardTranslation, onSwipeRight, translateX]);
 
   const swipeLeft = useCallback(() => {
     onSwipeLeft?.();
     translateX.value = withSpring(-maxCardTranslation);
-    activeIndex.value = activeIndex.value + 1;
+    activeIndex.value += 1;
   }, [activeIndex, maxCardTranslation, onSwipeLeft, translateX]);
 
   const reset = useCallback(() => {
@@ -84,8 +85,9 @@ const SwipeableCard = ({
     [swipeLeft, swipeRight, reset]
   );
 
+  const translationFactor = 3;
   const inputTranslationRange = useMemo(
-    () => [-width / 3, 0, width / 3],
+    () => [-width / translationFactor, 0, width / translationFactor],
     [width]
   );
 
@@ -100,12 +102,13 @@ const SwipeableCard = ({
     [inputTranslationRange]
   );
 
+  const rotationFactor = 20;
   const rotate = useDerivedValue(
     () =>
       interpolate(
         translateX.value,
         inputTranslationRange,
-        [-Math.PI / 20, 0, Math.PI / 20],
+        [-Math.PI / rotationFactor, 0, Math.PI / rotationFactor],
         Extrapolation.CLAMP
       ),
     [inputTranslationRange]
@@ -116,7 +119,9 @@ const SwipeableCard = ({
       currentActiveIndex.value = Math.floor(activeIndex.value);
     })
     .onUpdate((event) => {
-      if (currentActiveIndex.value !== index) return;
+      if (currentActiveIndex.value !== index) {
+        return;
+      }
       translateX.value = event.translationX;
       translateY.value = event.translationY;
 
@@ -157,7 +162,9 @@ const SwipeableCard = ({
       );
     })
     .onFinalize((event) => {
-      if (currentActiveIndex.value !== index) return;
+      if (currentActiveIndex.value !== index) {
+        return;
+      }
 
       if (nextActiveIndex.value === activeIndex.value + 1) {
         const sign = Math.sign(event.translationX);
@@ -173,9 +180,12 @@ const SwipeableCard = ({
     });
 
   const rCardStyle = useAnimatedStyle(() => {
-    const opacity = withTiming(index - activeIndex.value < 5 ? 1 : 0);
-    const transY = withTiming((index - activeIndex.value) * 23);
-    const scale = withTiming(1 - 0.07 * (index - activeIndex.value));
+    const newLocal = 5;
+    const opacity = withTiming(index - activeIndex.value < newLocal ? 1 : 0);
+    const swipeCardHeight = 23;
+    const transY = withTiming((index - activeIndex.value) * swipeCardHeight);
+    const scaleHeight = 0.07;
+    const scale = withTiming(1 - scaleHeight * (index - activeIndex.value));
     return {
       opacity,
       transform: [
@@ -205,9 +215,8 @@ const SwipeableCard = ({
           rCardStyle,
         ]}
       >
-        {children ? (
-          children
-        ) : image ? (
+        {children}
+        {!children && image && (
           <View
             style={{
               flex: 1,
@@ -223,7 +232,7 @@ const SwipeableCard = ({
               style={{ height: "100%", width: "100%" }}
             />
           </View>
-        ) : null}
+        )}
       </Animated.View>
     </GestureDetector>
   );

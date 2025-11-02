@@ -100,12 +100,12 @@ const RouteErrorFallback: React.FC<RouteErrorFallbackProps> = ({
   );
 };
 
-interface RouteErrorBoundaryProps {
+type RouteErrorBoundaryProps = {
   children: React.ReactNode;
   routeName?: string;
   onRouteError?: (error: Error, routeName?: string) => void;
   fallback?: React.ComponentType<RouteErrorFallbackProps>;
-}
+};
 
 export const RouteErrorBoundary: React.FC<RouteErrorBoundaryProps> = ({
   children,

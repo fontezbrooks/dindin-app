@@ -97,11 +97,11 @@ const AuthErrorFallback: React.FC<AuthErrorFallbackProps> = ({
   );
 };
 
-interface AuthErrorBoundaryProps {
+type AuthErrorBoundaryProps = {
   children: React.ReactNode;
   onAuthError?: (error: Error) => void;
   fallback?: React.ComponentType<AuthErrorFallbackProps>;
-}
+};
 
 export const AuthErrorBoundary: React.FC<AuthErrorBoundaryProps> = ({
   children,

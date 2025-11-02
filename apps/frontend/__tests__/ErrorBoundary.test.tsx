@@ -1,6 +1,5 @@
-import { jest } from "@jest/globals";
 import { fireEvent, render } from "@testing-library/react-native";
-import type React from "react";
+
 import {
   AuthErrorBoundary,
   ErrorBoundary,

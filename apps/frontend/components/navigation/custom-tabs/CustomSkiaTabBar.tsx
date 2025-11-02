@@ -9,7 +9,7 @@ import {
   rect,
   Skia,
 } from "@shopify/react-native-skia";
-import * as Haptics from "expo-haptics";
+import { selectionAsync } from "expo-haptics";
 import { TabTrigger } from "expo-router/ui";
 import { useCallback, useMemo, useState } from "react";
 import { StyleSheet, useWindowDimensions, View } from "react-native";
@@ -74,7 +74,7 @@ export function CustomSkiaTabBar() {
 
   const handleTabPress = useCallback((index: number, name: string) => {
     setCurrentIndex(index);
-    Haptics.selectionAsync();
+    selectionAsync();
   }, []);
 
   return (

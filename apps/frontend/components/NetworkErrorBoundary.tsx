@@ -76,12 +76,12 @@ const NetworkErrorFallback: React.FC<NetworkErrorFallbackProps> = ({
   );
 };
 
-interface NetworkErrorBoundaryProps {
+type NetworkErrorBoundaryProps = {
   children: React.ReactNode;
   onRetry?: () => void;
   showOfflineIndicator?: boolean;
   fallback?: React.ComponentType<NetworkErrorFallbackProps>;
-}
+};
 
 export const NetworkErrorBoundary: React.FC<NetworkErrorBoundaryProps> = ({
   children,

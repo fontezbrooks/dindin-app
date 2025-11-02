@@ -5,12 +5,20 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState,
 } from "react";
-import { useSharedValue } from "react-native-reanimated";
+import { useShallow } from "zustand/react/shallow";
 import type { SwipeableCardRefType } from "../components/SwipeCards";
 import { recipeService } from "../services/recipeService";
-import type { RecipeCard, RecipeFilters } from "../types/recipe";
+import {
+  selectCurrentRecipe,
+  selectIsNearEnd,
+  selectRemainingRecipes,
+  selectSwipeStats,
+  usePreferencesStore,
+  useRecipeStore,
+  useSessionStore,
+} from "../stores";
+import type { RecipeFilters } from "../types/recipe";
 import { recipeToCard } from "../types/recipe";
 
 type UseRecipeSwipeOptions = {
@@ -20,21 +28,45 @@ type UseRecipeSwipeOptions = {
 };
 
 export const useRecipeSwipe = (options: UseRecipeSwipeOptions = {}) => {
-  const { sessionId, filters, onMatch } = options;
+  const { sessionId = useSessionStore.getState().sessionId, filters, onMatch } = options;
   const { getToken } = useAuth();
 
-  // State
-  const [recipes, setRecipes] = useState<RecipeCard[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(true);
-  const [nextCursor, setNextCursor] = useState<string | undefined>();
+  // Zustand stores
+  const {
+    recipes,
+    currentIndex,
+    isLoading,
+    error,
+    hasMore,
+    nextCursor,
+    setRecipes,
+    addRecipes,
+    setLoading,
+    setError,
+    setHasMore,
+    setNextCursor,
+    recordSwipe,
+    undoLastSwipe,
+    setCurrentIndex,
+    reset,
+    getPendingSyncs,
+    markSwipeAsSynced,
+  } = useRecipeStore();
+
+  const { getRecipeFilters } = usePreferencesStore();
+  const { isSessionActive, addMatch } = useSessionStore();
+
+  // Get selectors
+  const currentRecipe = useRecipeStore(selectCurrentRecipe);
+  const remainingCards = useRecipeStore(selectRemainingRecipes);
+  const swipeStats = useRecipeStore(useShallow(selectSwipeStats));
+  const isNearEnd = useRecipeStore((state) => selectIsNearEnd(state, 5));
 
   // Refs
-  const activeIndex = useSharedValue(0);
   const loadingNextBatch = useRef(false);
-  const swipeHistory = useRef<Map<string, "like" | "dislike">>(new Map());
   const timeouts = useRef<NodeJS.Timeout[]>([]);
+  const authInitialized = useRef(false);
+  const hasInitiallyLoaded = useRef(false);
 
   // Create refs for each card
   const refs = useMemo(() => {
@@ -45,10 +77,6 @@ export const useRecipeSwipe = (options: UseRecipeSwipeOptions = {}) => {
     return pendingRefs;
   }, [recipes.length]);
 
-  // State to track auth initialization
-  const [authInitialized, setAuthInitialized] = useState(false);
-  const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
-
   // Initialize service with auth token
   useEffect(() => {
     const initAuth = async () => {
@@ -57,27 +85,30 @@ export const useRecipeSwipe = (options: UseRecipeSwipeOptions = {}) => {
         if (token) {
           recipeService.setAuthToken(token);
         }
+        authInitialized.current = true;
       } catch (error) {
         console.error("Failed to get auth token:", error);
-      } finally {
-        setAuthInitialized(true);
+        authInitialized.current = true; // Continue even if auth fails
       }
     };
-    initAuth();
+
+    if (!authInitialized.current) {
+      initAuth();
+    }
   }, [getToken]);
 
-  // Load initial batch of recipes
+  // Load recipes
   const loadRecipes = useCallback(
     async (isInitial = false, cursor?: string) => {
       if (loadingNextBatch.current && !isInitial) return;
 
       loadingNextBatch.current = true;
-      setIsLoading(isInitial);
+      setLoading(isInitial);
       setError(null);
 
       try {
         // Ensure auth is initialized before making API calls
-        if (!authInitialized) {
+        if (!authInitialized.current) {
           const token = await getToken();
           if (token) {
             recipeService.setAuthToken(token);
@@ -85,8 +116,7 @@ export const useRecipeSwipe = (options: UseRecipeSwipeOptions = {}) => {
         }
 
         // Get user preferences if not using custom filters
-        const effectiveFilters =
-          filters || (await recipeService.getUserPreferences());
+        const effectiveFilters = filters || getRecipeFilters();
 
         const response = await recipeService.fetchRecipeBatch(
           isInitial ? undefined : cursor || nextCursor,
@@ -99,7 +129,7 @@ export const useRecipeSwipe = (options: UseRecipeSwipeOptions = {}) => {
         if (isInitial) {
           setRecipes(newRecipeCards);
         } else {
-          setRecipes((prev) => [...prev, ...newRecipeCards]);
+          addRecipes(newRecipeCards);
         }
 
         setHasMore(response.hasMore);
@@ -116,106 +146,93 @@ export const useRecipeSwipe = (options: UseRecipeSwipeOptions = {}) => {
         console.error("Failed to load recipes:", err);
         setError(err instanceof Error ? err.message : "Failed to load recipes");
       } finally {
-        setIsLoading(false);
+        setLoading(false);
         loadingNextBatch.current = false;
       }
     },
-    [filters, authInitialized, getToken] // Removed nextCursor from dependencies
+    [
+      filters,
+      getToken,
+      nextCursor,
+      getRecipeFilters,
+      setRecipes,
+      addRecipes,
+      setLoading,
+      setError,
+      setHasMore,
+      setNextCursor,
+    ]
   );
 
   // Initial load (wait for auth) - only once!
   useEffect(() => {
-    if (authInitialized && !hasInitiallyLoaded) {
-      setHasInitiallyLoaded(true);
+    if (authInitialized.current && !hasInitiallyLoaded.current) {
+      hasInitiallyLoaded.current = true;
       loadRecipes(true);
     }
-  }, [authInitialized, hasInitiallyLoaded, loadRecipes]);
+  }, [loadRecipes]);
 
-  // Load more when running low on cards - with debounce
+  // Load more when running low on cards
   useEffect(() => {
-    // Only run if initially loaded to avoid startup issues
-    if (!hasInitiallyLoaded) return;
+    if (!hasInitiallyLoaded.current) return;
 
-    const currentIndex = Math.floor(activeIndex.value);
-    const remainingCards = recipes.length - currentIndex;
-
-    // Load more when we have less than 5 cards remaining
-    if (
-      remainingCards < 5 &&
-      hasMore &&
-      !loadingNextBatch.current &&
-      nextCursor &&
-      !isLoading
-    ) {
+    if (isNearEnd && hasMore && !loadingNextBatch.current && nextCursor && !isLoading) {
       loadRecipes(false, nextCursor);
     }
-  }, [
-    activeIndex.value,
-    recipes.length,
-    hasMore,
-    nextCursor,
-    isLoading,
-    hasInitiallyLoaded,
-  ]);
+  }, [isNearEnd, hasMore, nextCursor, isLoading, loadRecipes]);
 
   // Swipe handlers
   const handleSwipe = useCallback(
     async (action: "like" | "dislike") => {
-      const currentIndex = Math.floor(activeIndex.value);
-      if (currentIndex >= recipes.length) return;
+      if (!currentRecipe) return;
 
-      const recipe = recipes[currentIndex];
-
-      // Record swipe locally
-      swipeHistory.current.set(recipe._id, action);
+      // Record swipe in store
+      recordSwipe(currentRecipe._id, action);
 
       // Send to backend if session exists
-      if (sessionId) {
+      if (sessionId && isSessionActive()) {
         try {
-          await recipeService.recordSwipe(sessionId, recipe._id, action);
+          await recipeService.recordSwipe(sessionId, currentRecipe._id, action);
+          markSwipeAsSynced(currentRecipe._id);
 
-          // Check for match (simplified - real implementation would use WebSocket)
+          // Check for match
           if (action === "like" && onMatch) {
             // This would normally come from WebSocket
             // For now, just simulate a random match
             if (Math.random() > 0.7) {
-              onMatch(recipe._id);
+              onMatch(currentRecipe._id);
+              addMatch({
+                recipeId: currentRecipe._id,
+                recipeName: currentRecipe.title,
+                matchedAt: Date.now(),
+                participants: [],
+              });
             }
           }
         } catch (error) {
           console.error("Failed to record swipe:", error);
+          // Swipe already recorded locally, will be synced later
         }
       }
-
-      // Update active index
-      activeIndex.value = activeIndex.value + 1;
     },
-    [activeIndex, recipes, sessionId, onMatch]
+    [currentRecipe, sessionId, isSessionActive, recordSwipe, markSwipeAsSynced, onMatch, addMatch]
   );
 
   const swipeRight = useCallback(() => {
-    const currentIndex = Math.floor(activeIndex.value);
     if (!refs[currentIndex]) return;
 
     refs[currentIndex].current?.swipeRight();
     handleSwipe("like");
-  }, [activeIndex.value, refs, handleSwipe]);
+  }, [currentIndex, refs, handleSwipe]);
 
   const swipeLeft = useCallback(() => {
-    const currentIndex = Math.floor(activeIndex.value);
     if (!refs[currentIndex]) return;
 
     refs[currentIndex].current?.swipeLeft();
     handleSwipe("dislike");
-  }, [activeIndex.value, refs, handleSwipe]);
+  }, [currentIndex, refs, handleSwipe]);
 
-  const reset = useCallback(() => {
-    // Reset active index
-    activeIndex.value = 0;
-
-    // Clear swipe history
-    swipeHistory.current.clear();
-
+  const resetSwipes = useCallback(() => {
     // Reset all cards with animation
     refs.forEach((ref, index) => {
       timeouts.current.push(
@@ -225,38 +242,36 @@ export const useRecipeSwipe = (options: UseRecipeSwipeOptions = {}) => {
       );
     });
 
-    // Reset cursor and reload recipes
-    setNextCursor(undefined);
-    setHasInitiallyLoaded(false); // Allow a fresh reload
+    // Reset store and reload
+    reset();
+    hasInitiallyLoaded.current = false;
 
     // Use setTimeout to avoid immediate re-render issues
     setTimeout(() => {
-      setHasInitiallyLoaded(true);
+      hasInitiallyLoaded.current = true;
       loadRecipes(true);
     }, 100);
-  }, [refs, activeIndex, loadRecipes]);
+  }, [refs, reset, loadRecipes]);
 
   const undo = useCallback(() => {
-    if (activeIndex.value <= 0) return;
-
-    // Move back one card
-    activeIndex.value = Math.max(0, activeIndex.value - 1);
-
-    // Remove last swipe from history
-    const currentIndex = Math.floor(activeIndex.value);
-    if (currentIndex < recipes.length) {
-      const recipe = recipes[currentIndex];
-      swipeHistory.current.delete(recipe._id);
-    }
-  }, [activeIndex, recipes]);
+    if (currentIndex <= 0) return;
+    undoLastSwipe();
+  }, [currentIndex, undoLastSwipe]);
 
   // Sync offline swipes when reconnected
   useEffect(() => {
-    if (!sessionId) return;
+    if (!sessionId || !isSessionActive()) return;
 
-    const syncOffline = async () => {
+    const syncOfflineSwipes = async () => {
+      const pendingSwipes = getPendingSyncs();
+      if (pendingSwipes.length === 0) return;
+
       try {
-        await recipeService.syncOfflineSwipes(sessionId);
+        // Sync all pending swipes
+        for (const swipe of pendingSwipes) {
+          await recipeService.recordSwipe(sessionId, swipe.recipeId, swipe.action);
+          markSwipeAsSynced(swipe.recipeId);
+        }
       } catch (error) {
         console.error("Failed to sync offline swipes:", error);
       }
@@ -264,12 +279,12 @@ export const useRecipeSwipe = (options: UseRecipeSwipeOptions = {}) => {
 
     // Check network status and sync
     const handleOnline = () => {
-      syncOffline();
+      syncOfflineSwipes();
     };
 
     window.addEventListener("online", handleOnline);
     return () => window.removeEventListener("online", handleOnline);
-  }, [sessionId]);
+  }, [sessionId, isSessionActive, getPendingSyncs, markSwipeAsSynced]);
 
   // Cleanup
   useEffect(
@@ -282,27 +297,23 @@ export const useRecipeSwipe = (options: UseRecipeSwipeOptions = {}) => {
   return {
     // Data
     recipes,
-    currentRecipe: recipes[Math.floor(activeIndex.value)],
+    currentRecipe,
     isLoading,
     error,
     hasMore,
 
     // Controls
-    activeIndex,
+    activeIndex: { value: currentIndex },
     refs,
     swipeRight,
     swipeLeft,
-    reset,
+    reset: resetSwipes,
     undo,
 
     // Stats
-    likedCount: Array.from(swipeHistory.current.values()).filter(
-      (v) => v === "like"
-    ).length,
-    dislikedCount: Array.from(swipeHistory.current.values()).filter(
-      (v) => v === "dislike"
-    ).length,
-    swipeHistory: swipeHistory.current,
+    likedCount: swipeStats.liked,
+    dislikedCount: swipeStats.disliked,
+    swipeHistory: new Map(), // For backwards compatibility
 
     // Actions
     reload: () => loadRecipes(true),

@@ -2,7 +2,12 @@ import { verifyToken } from "@clerk/backend";
 import type { ServerWebSocket } from "bun";
 import { logger } from "../../../../packages/logger";
 import { getDB } from "../config/database";
-import { SessionService } from "../services/sessionService";
+import {
+  addMessage,
+  getSession,
+  leaveSession,
+  recordSwipe,
+} from "../services/sessionService";
 import {
   type ExtendedServerWebSocket,
   type WSMessage,
@@ -154,7 +159,7 @@ class WebSocketManager {
   private async handleJoinSession(client: WSClient, sessionId: string) {
     try {
       // Verify session exists and user is participant
-      const session = await SessionService.getSession(sessionId);
+      const session = await getSession(sessionId);
 
       if (!session) {
         client.ws.send(
@@ -230,7 +235,7 @@ class WebSocketManager {
     }
 
     // Update database
-    await SessionService.leaveSession(sessionId, client.userId);
+    await leaveSession(sessionId, client.userId);
 
     // Notify remaining participants
     this.broadcastToSession(sessionId, {
@@ -259,7 +264,7 @@ class WebSocketManager {
     const { itemType, itemId, direction } = data.data;
 
     // Record swipe in database
-    await SessionService.recordSwipe(
+    await recordSwipe(
       client.sessionId,
       client.userId,
       itemType,
@@ -268,7 +273,7 @@ class WebSocketManager {
     );
 
     // Get updated session to check for matches
-    const session = await SessionService.getSession(client.sessionId);
+    const session = await getSession(client.sessionId);
 
     if (!session) {
       return;
@@ -328,11 +333,11 @@ class WebSocketManager {
     const { message } = data.data;
 
     // Save message to database
-    await SessionService.addMessage(
+    await addMessage(
       client.sessionId,
       client.userId,
       client.username || "",
-      message
+      message as string
     );
 
     // Broadcast to all participants

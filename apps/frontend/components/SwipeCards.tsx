@@ -1,5 +1,5 @@
 import { Image } from "expo-image";
-import { forwardRef, useCallback, useImperativeHandle, useMemo } from "react";
+import { type Ref, useCallback, useImperativeHandle, useMemo } from "react";
 import { useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import type { SharedValue } from "react-native-reanimated";
@@ -17,6 +17,7 @@ import { scheduleOnRN } from "react-native-worklets";
 import type { IMAGES } from "../constants/Images";
 
 type SwipeableCardProps = {
+  ref?: Ref<SwipeableCardRefType>;
   image?: (typeof IMAGES)[0] | null;
   index: number;
   activeIndex: SharedValue<number>;
@@ -33,12 +34,15 @@ export type SwipeableCardRefType = {
 
 const SIGNED_NORMALIZED_INPUT_RANGE = [-1, 0, 1];
 
-const SwipeableCard = forwardRef<
-  {
-    //
-  },
-  SwipeableCardProps
->(({ image, index, activeIndex, onSwipeLeft, onSwipeRight, children }, ref) => {
+const SwipeableCard = ({
+  ref,
+  image,
+  index,
+  activeIndex,
+  onSwipeLeft,
+  onSwipeRight,
+  children,
+}: SwipeableCardProps) => {
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const currentActiveIndex = useSharedValue(Math.floor(activeIndex.value));
@@ -223,6 +227,6 @@ const SwipeableCard = forwardRef<
       </Animated.View>
     </GestureDetector>
   );
-});
+};
 
 export { SwipeableCard };

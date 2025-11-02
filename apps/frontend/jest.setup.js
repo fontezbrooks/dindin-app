@@ -51,10 +51,10 @@ jest.mock("expo-haptics", () => ({
 jest.mock("expo-image", () => {
   const React = require("react");
   return {
-    Image: React.forwardRef((props, ref) => {
+    Image: ({ ref, ...props }) => {
       const MockImage = require("react-native").Image;
       return React.createElement(MockImage, { ...props, ref });
-    }),
+    },
   };
 });
 
